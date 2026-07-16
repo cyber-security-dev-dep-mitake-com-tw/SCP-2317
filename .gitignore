@@ -12,3 +12,4 @@ tests/robot/resources/__pycache__/
 /platform/windows-addin/target/x86_64-pc-windows-msvc/debug
 /platform/windows-addin/target/x86_64-pc-windows-gnu/debug
 /platform/windows-addin/target/debug
+docs/ref.txt

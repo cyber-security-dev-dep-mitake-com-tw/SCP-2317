@@ -6,4 +6,11 @@ Primary threats include malicious MIME parsers, decompression bombs, SSRF throug
 
 Required production controls include mTLS device identity, tenant-scoped authorization, MIME parsing in a low-privilege process, archive recursion/ratio limits, URL canonicalization, object encryption, immutable audit events, per-tenant keys, retention deletion, signed updates and a kill switch.
 
-Current implementation only covers the API heuristic scanner, add-in and native scaffolds, and CI/package automation. The controls above remain required before any real tenant deployment.
+## Current coverage
+
+- Heuristic API scanner with validation and policy file (no attachment execution).
+- Sandbox **stub** that always returns `not_executed` (see `internal/sandbox` and `docs/SANDBOX.md`).
+- Outlook add-in and native scaffolds without production identity or interception guarantees.
+- CI and unsigned packaging scaffolding.
+
+The production controls above remain required before any real tenant deployment.

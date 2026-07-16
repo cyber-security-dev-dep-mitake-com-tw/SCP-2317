@@ -17,10 +17,10 @@ import (
 var urlInText = regexp.MustCompile(`(?i)\bhttps?://[^\s<>"')]+`)
 
 type Policy struct {
-	HighRiskExtensions  []string `json:"high_risk_extensions"`
-	InlineSizeLimitBytes int     `json:"inline_size_limit_bytes"`
-	MaxURLs             int      `json:"max_urls"`
-	MaxAttachments      int      `json:"max_attachments"`
+	HighRiskExtensions   []string `json:"high_risk_extensions"`
+	InlineSizeLimitBytes int      `json:"inline_size_limit_bytes"`
+	MaxURLs              int      `json:"max_urls"`
+	MaxAttachments       int      `json:"max_attachments"`
 }
 
 func DefaultPolicy() Policy {

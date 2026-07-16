@@ -1,43 +1,66 @@
-# SCP-2317 Implementation Status Report
+# SCP-2317 Gap Patch Status Report
 
 Date: 2026-07-16
 
 ## Scope
 
-This report records the current implementation pass for the SCP-2317 starter repository.
+Closes the honesty/buildability gap between documentation and the repository, then hardens the MVP API contract, Outlook taskpane, sandbox stub, and CI scaffolding.
 
 ## Completed In This Pass
 
-- added a base implementation plan at `docs/IMPLEMENTATION_PLAN.md`;
-- normalized the Go API entrypoint to `cmd/api/main.go`;
-- kept the existing Go API build and test path working;
-- hardened the API constructor to default to the scanner pipeline when nil is passed;
-- added a GitLab CI/CD scaffold with lint, unit test, Robot Framework, package, and publish stages;
-- added a GitHub Actions workflow that mirrors the GitLab pipeline stages;
-- added Robot Framework API smoke tests under `tests/robot/`;
-- added Go unit tests for the API and scanner pipeline;
-- added GitLab packaging scripts for Windows and macOS;
-- added Windows installer source files for `.exe` and `.msi` packaging;
-- added a release artifact manifest script;
-- updated the root README and security docs to reflect the current scaffolding;
-- recorded the current work in this report.
+### Integrity (Phase 0)
+
+- fixed `.gitignore` so packaging scripts and `ApiLibrary.py` are tracked;
+- added `.github/workflows/ci.yml` and `.gitlab-ci.yml`;
+- aligned Windows packaging script with `mailguard-setup.iss` / `mailguard-product.wxs`;
+- fixed macOS `Package.swift` path to `Sources/MailGuardES`;
+- corrected README verification claims.
+
+### API / scanner (Phase 1)
+
+- Finding JSON tags (`engine`, `severity`, `summary`);
+- structured 4xx `APIError` responses;
+- request validation (`message_id`, URL/attachment caps, invalid base64);
+- body_preview URL extraction;
+- `rules/attachment_policy.json`, `samples/*.json`, `api/openapi.yaml`;
+- expanded Go and Robot tests.
+
+### Outlook add-in (Phase 2)
+
+- removed conflicting `declare const Office`;
+- `Office.onReady`, sender, URL extraction, configurable API base (`http://127.0.0.1:8080`);
+- sideload notes in `outlook-addin/README.md`.
+
+### Native scaffolds / Makefile (Phase 3)
+
+- platform README boundaries;
+- `make test-robot` / `make build-addin`; zip target directory name fixed.
+
+### Sandbox stub (Phase 4)
+
+- `internal/sandbox` MemoryWorker (`not_executed`);
+- HTTP routes for submit/status/report;
+- `docs/SANDBOX.md` mapped to code.
+
+### Deferred list (Phase 5)
+
+- documented in README, IMPLEMENTATION_PLAN, and this report (auth/MIME/real VM/signing).
 
 ## Verification
 
-- `go test ./...` passed locally.
-- `go run ./cmd/api` started the API successfully and continued serving until the command timeout stopped the foreground process.
-
-## Notes and Constraints
-
-- Windows and macOS installer jobs depend on platform-specific runner toolchains that are not available in the current local environment.
-- macOS packaging expects `swift`, `pkgbuild`, and `hdiutil` on the macOS runner.
-- Windows packaging expects Inno Setup and WiX tooling on the Windows runner.
-- Robot Framework execution expects Python and `robotframework` installed in the CI job.
-- `swift` is not installed in the current local environment, so the macOS package target was validated by static file review rather than a local build.
+| Check | Result |
+|---|---|
+| `go test ./...` | Run as part of this pass |
+| Robot smoke (`scripts/gitlab/run-robot.sh`) | Run when Python + robotframework available |
+| Outlook `npm test` (`tsc --noEmit`) | Run as part of this pass |
+| Windows/macOS installer builds | Not run locally; require platform runners |
+| Real disposable VM sandbox | Not implemented (stub only) |
 
 ## Remaining Work
 
-- confirm runner availability and code-signing/notarization credentials;
-- finish platform-specific installer validation on real Windows and macOS runners;
-- expand the Outlook add-in and native endpoint coverage;
-- update the rest of the documentation to describe the new CI and testing flow.
+- tenant auth, mTLS, policy persistence;
+- MIME/archive isolated parsing, ClamAV/YARA;
+- queue/object store + real disposable VMs;
+- signed/notarized installers and updater;
+- Outlook send/compose events and native MAPI/ES production clients;
+- packaging job validation on real Windows and macOS GitLab runners.

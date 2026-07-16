@@ -6,18 +6,21 @@ SCP-2317 is a defensive starter monorepo for email protection on Windows and mac
 
 | Path | Role | Status |
 |---|---|---|
-| `outlook-addin/` | Cross-platform Outlook JS client | Basic scan client |
-| `platform/windows-mapi/` | Classic Outlook/MAPI native provider | Buildable Rust scaffold |
+| `outlook-addin/` | Cross-platform Outlook JS client | ItemRead taskpane MVP (`tsc` buildable) |
+| `platform/windows-mapi/` | Classic Outlook/MAPI native provider | Buildable Rust scaffold (no MAPI calls) |
 | `platform/macos-es/` | macOS Endpoint Security system extension core | Buildable Swift scaffold; entitlement required |
-| `cmd/api`, `internal/` | Go scan API and analyzer pipeline | Runnable MVP |
-| `docs/SANDBOX.md` | Disposable VM worker contract | Design baseline |
+| `cmd/api`, `internal/` | Go scan API, heuristic scanner, sandbox stub | Runnable MVP |
+| `api/openapi.yaml` | HTTP contract | Synced with handlers |
+| `rules/attachment_policy.json` | High-risk extension / size limits | Loaded by scanner |
+| `samples/` | Clean / suspicious / malicious fixtures | Used by Robot tests |
+| `docs/SANDBOX.md` | Disposable VM worker contract | Stub worker in `internal/sandbox` |
 
 ## Quick start
 
 ```bash
 go test ./...
 go run ./cmd/api
-curl -sS http://localhost:8080/v1/email/scan \
+curl -sS http://127.0.0.1:8080/v1/email/scan \
   -H 'content-type: application/json' \
   -d '{"message_id":"demo","sender":"billing@example.test","subject":"invoice","urls":["http://xn--demo.test"],"attachments":[{"name":"invoice.exe","content_type":"application/octet-stream"}]}'
 ```
@@ -26,21 +29,23 @@ Or run `docker compose up --build`. The service binds only to localhost.
 
 ## Verification and release scaffolding
 
-- Local API coverage: `go test ./...`
-- Go unit tests: API routes and scanner heuristics
-- Robot Framework smoke tests: `tests/robot/`
-- GitLab CI/CD: `.gitlab-ci.yml`
-- GitHub Actions: `.github/workflows/ci.yml`
-- Packaging scripts: `scripts/gitlab/`
-- Installer sources: `installer/windows/`
-- Release report: `docs/reports/`
+| Item | Status |
+|---|---|
+| `go test ./...` | Verified locally / CI |
+| Robot Framework API smoke (`make test-robot`) | Verified when Python + robotframework installed |
+| Outlook add-in typecheck (`make build-addin`) | Verified via `tsc` |
+| GitHub Actions (`.github/workflows/ci.yml`) | Present: unit, robot, add-in, scaffold checks |
+| GitLab CI (`.gitlab-ci.yml`) | Present: lint/unit/robot; package jobs manual + runner-tagged |
+| Packaging scripts (`scripts/gitlab/`) | Present; require Windows/macOS toolchains |
+| Installer sources (`installer/windows/`) | Present (unsigned) |
+| Release report (`docs/reports/`) | Updated for this patch |
 
 ## Recommended implementation order
 
 1. Complete tenant authentication, mTLS device enrollment and policy distribution.
 2. Finish the Outlook JS add-in for supported read/compose and send events.
 3. Add MIME/archive parsing in a separate restricted process, followed by ClamAV/YARA adapters.
-4. Implement the queue/object-store contract and disposable VM sandbox described in `docs/SANDBOX.md`.
+4. Replace the sandbox stub with the queue/object-store + disposable VM worker in `docs/SANDBOX.md`.
 5. Add Windows MAPI only for classic Outlook coverage gaps; keep it read-only until code signing, deployment and rollback are proven.
 6. Package macOS as a signed containing app + System Extension after Apple grants the Endpoint Security entitlement.
 
@@ -51,9 +56,9 @@ Or run `docker compose up --build`. The service binds only to localhost.
 - Apple Endpoint Security observes filesystem/process events, not Outlook message semantics. Combine it with Office.js or server-side mail scanning.
 - Never run submitted attachments inside the API container, on the endpoint, or with host filesystem/network access.
 
-## Production gaps
+## Production gaps (explicitly deferred)
 
-This starter omits certificate enrollment, admin UI, persistence, message attachment download, queue/object storage, YARA/ClamAV, a real VM sandbox, notarized installers, telemetry, updater and SIEM export. Those are explicit next modules, not hidden assumptions.
+Certificate enrollment, admin UI, persistence, message attachment download, real queue/object storage, YARA/ClamAV, a real VM sandbox, notarized installers, telemetry, updater and SIEM export remain next modules—not hidden assumptions.
 
 ## Reference projects and docs
 

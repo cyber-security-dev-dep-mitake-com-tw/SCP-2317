@@ -21,11 +21,13 @@ done
 cp "$BRAND/logo-512.png" "$ROOT_DIR/assets/logo.png"
 
 # Ribbon command icons required by outlook-addin/manifest.xml (16/32/80),
-# plus the legacy 64px add-in icon referenced by IconUrl.
+# the legacy 64px add-in icon referenced by IconUrl, and the 128px
+# HighResolutionIconUrl required by newer Outlook clients.
 cp "$BRAND/logo-16.png" "$ROOT_DIR/outlook-addin/icon-16.png"
 cp "$BRAND/logo-32.png" "$ROOT_DIR/outlook-addin/icon-32.png"
 cp "$BRAND/logo-80.png" "$ROOT_DIR/outlook-addin/icon-80.png"
 cp "$BRAND/logo-64.png" "$ROOT_DIR/outlook-addin/icon-64.png"
+cp "$BRAND/logo-128.png" "$ROOT_DIR/outlook-addin/icon-128.png"
 
 ICONSET="$BRAND/SCP2317.iconset"
 rm -rf "$ICONSET" && mkdir -p "$ICONSET"

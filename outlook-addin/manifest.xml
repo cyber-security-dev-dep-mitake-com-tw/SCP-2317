@@ -11,6 +11,7 @@
   <DisplayName DefaultValue="SCP-2317 Email Scanner"/>
   <Description DefaultValue="Scans the selected email with an authorized SCP-2317 service."/>
   <IconUrl DefaultValue="https://localhost:3000/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:3000/icon-128.png"/>
   <SupportUrl DefaultValue="https://localhost:3000/support.html"/>
   <AppDomains>
     <AppDomain>https://localhost:3000</AppDomain>
@@ -26,26 +27,11 @@
   <Rule xsi:type="RuleCollection" Mode="Or"><Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/></Rule>
 
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
-    <Requirements>
-      <bt:Sets>
-        <bt:Set Name="Mailbox" MinVersion="1.8"/>
-      </bt:Sets>
-    </Requirements>
-    <FormSettings>
-      <Form xsi:type="ItemRead">
-        <DesktopSettings>
-          <SourceLocation resid="Taskpane.Url"/>
-          <RequestedHeight>250</RequestedHeight>
-        </DesktopSettings>
-      </Form>
-    </FormSettings>
-    <Permissions>ReadItem</Permissions>
-    <Rule xsi:type="RuleCollection" Mode="Or">
-      <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/>
-    </Rule>
-    <DisableEntityHighlighting>false</DisableEntityHighlighting>
-
     <!--
+      This V1_0 wrapper only exists to host the V1_1 override below (its
+      schema does not allow FormSettings/Permissions/Rule here - those stay
+      on the root OfficeApp element above).
+
       Ribbon commands below use CustomTab, which Outlook only renders on
       classic Outlook desktop for Windows (Win32/MSI). Outlook on the web,
       new Outlook on Windows, and Outlook on Mac ignore CustomTab; on those

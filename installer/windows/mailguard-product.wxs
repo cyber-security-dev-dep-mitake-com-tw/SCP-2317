@@ -12,6 +12,25 @@
     <Feature Id="MainFeature" Title="SCP-2317" Level="1">
       <ComponentGroupRef Id="SCP2317Components" />
     </Feature>
+
+    <CustomAction
+      Id="RegisterOutlookComAddin"
+      Directory="INSTALLFOLDER"
+      ExeCommand="[SystemFolder]regsvr32.exe /s &quot;[#SCP2317OutlookAddinDll]&quot;"
+      Execute="deferred"
+      Return="check"
+      Impersonate="yes" />
+    <CustomAction
+      Id="UnregisterOutlookComAddin"
+      Directory="INSTALLFOLDER"
+      ExeCommand="[SystemFolder]regsvr32.exe /u /s &quot;[#SCP2317OutlookAddinDll]&quot;"
+      Execute="deferred"
+      Return="ignore"
+      Impersonate="yes" />
+    <InstallExecuteSequence>
+      <Custom Action="RegisterOutlookComAddin" After="InstallFiles" Condition="NOT Installed" />
+      <Custom Action="UnregisterOutlookComAddin" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
   </Package>
 
   <Fragment>
@@ -24,6 +43,9 @@
     <ComponentGroup Id="SCP2317Components" Directory="INSTALLFOLDER">
       <Component Id="SCP2317ApiComponent" Guid="{A5C49D62-0D2B-4F3B-9E0F-7D8F3A0D6B6A}">
         <File Source="$(var.ApiBinaryPath)" KeyPath="yes" />
+      </Component>
+      <Component Id="SCP2317OutlookAddinComponent" Guid="{E2B0A7F5-735B-4F6F-A03F-50E350C2B47B}">
+        <File Id="SCP2317OutlookAddinDll" Source="$(var.AddinDllPath)" KeyPath="yes" />
       </Component>
       <Component Id="SCP2317IconComponent" Guid="{B1C2D3E4-5F60-4A71-8B92-0C1D2E3F4A5B}">
         <File Source="$(var.LogoIcoPath)" Name="scp2317.ico" />

@@ -2,6 +2,7 @@
 #define MyAppVersion "0.1.0"
 #define MyAppPublisher "SCP-2317"
 #define MyAppExeName "scp2317-api.exe"
+#define MyOutlookAddinDll "scp2317_outlook_comaddin.dll"
 
 [Setup]
 AppId={{B9B7D7BA-4F54-4B2C-9AF0-0D6D8E9B7D51}}
@@ -26,8 +27,15 @@ PrivilegesRequired=admin
 
 [Files]
 Source: "..\..\dist\windows\payload\SCP-2317\scp2317-api.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\dist\windows\payload\SCP-2317\{#MyOutlookAddinDll}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\assets\logo.ico"; DestDir: "{app}"; DestName: "scp2317.ico"; Flags: ignoreversion
 Source: "..\..\assets\logo.png"; DestDir: "{app}"; Flags: ignoreversion
+
+[Run]
+Filename: "{sys}\regsvr32.exe"; Parameters: "/s ""{app}\{#MyOutlookAddinDll}"""; Flags: runhidden; StatusMsg: "Registering the Outlook add-in..."
+
+[UninstallRun]
+Filename: "{sys}\regsvr32.exe"; Parameters: "/u /s ""{app}\{#MyOutlookAddinDll}"""; Flags: runhidden
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\scp2317.ico"

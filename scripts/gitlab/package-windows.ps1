@@ -12,6 +12,10 @@ $OutDir = Join-Path $RootDir 'dist\windows'
 $PayloadDir = Join-Path $OutDir 'payload\SCP-2317'
 $InstallerDir = Join-Path $RootDir 'installer\windows'
 $ApiBinary = Join-Path $PayloadDir 'scp2317-api.exe'
+$AddinTarget = 'x86_64-pc-windows-msvc'
+$AddinDllName = 'scp2317_outlook_comaddin.dll'
+$AddinBuildDll = Join-Path $RootDir "platform\windows-addin\target\$AddinTarget\release\$AddinDllName"
+$AddinPayloadDll = Join-Path $PayloadDir $AddinDllName
 $MsiOut = Join-Path $OutDir 'SCP-2317.msi'
 $LogoIco = Join-Path $RootDir 'assets\logo.ico'
 $LogoPng = Join-Path $RootDir 'assets\logo.png'
@@ -29,9 +33,16 @@ try {
   go build -ldflags='-s -w' -o $ApiBinary ./cmd/api
   Assert-LastExitCode -Step 'go build'
 
+  cargo build --manifest-path (Join-Path $RootDir 'platform\windows-addin\Cargo.toml') --target $AddinTarget --release
+  Assert-LastExitCode -Step 'cargo build windows-addin'
+
   if (-not (Test-Path $ApiBinary)) {
     throw "go build reported success but $ApiBinary was not created."
   }
+  if (-not (Test-Path $AddinBuildDll)) {
+    throw "cargo build reported success but $AddinBuildDll was not created."
+  }
+  Copy-Item -Force $AddinBuildDll $AddinPayloadDll
   if (-not (Test-Path $LogoIco)) {
     throw 'assets/logo.ico is missing; generate branding assets before packaging.'
   }
@@ -61,6 +72,7 @@ try {
   # so the payload/logo paths are passed in as absolute preprocessor variables.
   $wixDefines = @(
     "-d", "ApiBinaryPath=$ApiBinary",
+    "-d", "AddinDllPath=$AddinPayloadDll",
     "-d", "LogoIcoPath=$LogoIco",
     "-d", "LogoPngPath=$LogoPng"
   )
@@ -74,6 +86,7 @@ try {
     New-Item -ItemType Directory -Force -Path $objDir | Out-Null
     & candle.exe `
       "-dApiBinaryPath=$ApiBinary" `
+      "-dAddinDllPath=$AddinPayloadDll" `
       "-dLogoIcoPath=$LogoIco" `
       "-dLogoPngPath=$LogoPng" `
       -out (Join-Path $objDir 'mailguard-product.wixobj') `

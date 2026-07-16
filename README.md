@@ -7,6 +7,7 @@ SCP-2317 is a defensive starter monorepo for email protection on Windows and mac
 | Path | Role | Status |
 |---|---|---|
 | `outlook-addin/` | Cross-platform Outlook JS client | ItemRead taskpane MVP (`tsc` buildable) |
+| `platform/windows-addin/` | Native classic Outlook COM add-in | Installer-registered Ribbon add-in; no manifest sideload |
 | `platform/windows-mapi/` | Classic Outlook/MAPI native provider | Buildable Rust scaffold (no MAPI calls) |
 | `platform/macos-es/` | macOS Endpoint Security system extension core | Buildable Swift scaffold; entitlement required |
 | `cmd/api`, `internal/` | Go scan API, heuristic scanner, sandbox stub | Runnable MVP |
@@ -40,6 +41,7 @@ Triggers: push to `main`/`master`, version tags (`v*`), or **Run workflow** (man
 | `macos-13` (Intel) | `SCP-2317.pkg`, `SCP-2317.dmg` |
 
 Artifacts are unsigned developer builds. Installers embed the SCP-2317 logo from `assets/logo.*` (see `assets/ATTRIBUTION.md`).
+On Windows, the installer also installs and registers the native classic Outlook COM add-in with `regsvr32`, so classic Outlook loads the embedded Ribbon UI on startup without a `manifest.xml` sideload step.
 
 Local packaging:
 
@@ -78,7 +80,7 @@ powershell -File scripts/gitlab/package-windows.ps1
 ## Important platform realities
 
 - Office.js is the cross-platform path. Event-based handlers are short-lived and have client/API-set constraints.
-- MAPI/COM is Windows/classic-Outlook specific and is not equivalent to a supported universal pre-view interception hook.
+- MAPI/COM is Windows/classic-Outlook specific. The native COM add-in is actively registered by the Windows installer for classic Outlook; new Outlook for Windows does not support COM/VSTO add-ins.
 - Apple Endpoint Security observes filesystem/process events, not Outlook message semantics. Combine it with Office.js or server-side mail scanning.
 - Never run submitted attachments inside the API container, on the endpoint, or with host filesystem/network access.
 

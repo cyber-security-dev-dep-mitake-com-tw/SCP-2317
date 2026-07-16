@@ -84,27 +84,38 @@ impl std::fmt::Display for ScanError {
 pub fn extract_urls(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut seen = HashSet::new();
-    for scheme in ["http://", "https://"] {
-        let mut search_from = 0usize;
-        while let Some(rel) = text[search_from..].find(scheme) {
-            let begin = search_from + rel;
-            let rest = &text[begin..];
-            let end = rest
-                .find(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '"' | '\''))
-                .unwrap_or(rest.len());
-            let mut url = &rest[..end];
-            while let Some(last) = url.chars().last() {
-                if ".,;:)".contains(last) {
-                    url = &url[..url.len() - last.len_utf8()];
-                } else {
-                    break;
-                }
+
+    let mut search_from = 0usize;
+    while search_from < text.len() {
+        let next = ["http://", "https://"]
+            .iter()
+            .filter_map(|scheme| {
+                text[search_from..]
+                    .find(scheme)
+                    .map(|rel| (search_from + rel, scheme.len()))
+            })
+            .min_by_key(|(begin, _)| *begin);
+
+        let Some((begin, scheme_len)) = next else {
+            break;
+        };
+
+        let rest = &text[begin..];
+        let end = rest
+            .find(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '"' | '\''))
+            .unwrap_or(rest.len());
+        let mut url = &rest[..end];
+        while let Some(last) = url.chars().last() {
+            if ".,;:)".contains(last) {
+                url = &url[..url.len() - last.len_utf8()];
+            } else {
+                break;
             }
-            if !url.is_empty() && seen.insert(url.to_string()) {
-                out.push(url.to_string());
-            }
-            search_from = begin + scheme.len();
         }
+        if !url.is_empty() && seen.insert(url.to_string()) {
+            out.push(url.to_string());
+        }
+        search_from = begin + scheme_len;
     }
     out
 }

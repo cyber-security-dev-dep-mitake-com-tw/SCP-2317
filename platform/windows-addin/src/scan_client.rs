@@ -5,6 +5,23 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::sync::OnceLock;
+use std::time::Duration;
+
+/// A COM callback runs on Outlook's main (STA) thread, so a hung network
+/// call would freeze the whole Outlook UI. Keep the budget short; the API
+/// is meant to be a local/LAN heuristic scanner, not a slow remote service.
+const HTTP_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::AgentBuilder::new()
+            .timeout_connect(HTTP_TIMEOUT)
+            .timeout(HTTP_TIMEOUT)
+            .build()
+    })
+}
 
 pub const DEFAULT_API_BASE: &str = "http://127.0.0.1:8080";
 
@@ -115,7 +132,8 @@ pub fn verdict_text(v: &Verdict) -> String {
 
 pub fn call_scan_api(base_url: &str, req: &EmailScanRequest) -> Result<Verdict, ScanError> {
     let url = format!("{}/v1/email/scan", base_url.trim_end_matches('/'));
-    let resp = ureq::post(&url)
+    let resp = agent()
+        .post(&url)
         .set("content-type", "application/json")
         .send_string(&serde_json::to_string(req).map_err(|e| ScanError::Decode(e.to_string()))?)
         .map_err(|e| ScanError::Http(e.to_string()))?;
@@ -135,7 +153,8 @@ pub fn report_suspicious(
         "objectRef": format!("outlook:{message_id}"),
         "policy": "user-reported",
     });
-    let resp = ureq::post(&url)
+    let resp = agent()
+        .post(&url)
         .set("content-type", "application/json")
         .send_string(&body.to_string())
         .map_err(|e| ScanError::Http(e.to_string()))?;
@@ -145,7 +164,8 @@ pub fn report_suspicious(
 
 pub fn check_api_health(base_url: &str) -> bool {
     let url = format!("{}/healthz", base_url.trim_end_matches('/'));
-    ureq::get(&url)
+    agent()
+        .get(&url)
         .call()
         .map(|r| r.status() == 200)
         .unwrap_or(false)

@@ -14,7 +14,7 @@
 //! signatures back to owned types.
 
 use windows::core::{interface, OutRef, Ref, BSTR, HRESULT};
-use windows::Win32::System::Com::{IDispatch, SAFEARRAY};
+use windows::Win32::System::Com::{IDispatch, IDispatch_Impl, IDispatch_Vtbl, SAFEARRAY};
 use core::ffi::c_void;
 
 #[interface("B65AD801-ABAF-11D0-BB8B-00A0C90F2744")]

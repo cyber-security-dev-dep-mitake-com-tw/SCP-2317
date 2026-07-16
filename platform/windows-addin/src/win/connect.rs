@@ -14,7 +14,7 @@ use crate::win::automation::{self, CurrentItemFields};
 use crate::win::ui::{show_message, Severity};
 use std::ffi::c_void;
 use std::sync::Mutex;
-use windows::core::{implement, BSTR, GUID, HRESULT, OutRef, PCWSTR, Ref, Result};
+use windows::core::{implement, BSTR, GUID, HRESULT, Interface, OutRef, PCWSTR, Ref, Result};
 use windows::Win32::Foundation::{DISP_E_MEMBERNOTFOUND, E_NOTIMPL, S_OK};
 use windows::Win32::System::Com::{
     DISPATCH_FLAGS, DISPPARAMS, EXCEPINFO, IDispatch, ITypeInfo, SAFEARRAY,
@@ -250,7 +250,7 @@ impl windows::Win32::System::Com::IDispatch_Impl for Connect_Impl {
         Err(E_NOTIMPL.into())
     }
 
-    unsafe fn GetIDsOfNames(
+    fn GetIDsOfNames(
         &self,
         _riid: *const GUID,
         rgsz_names: *const PCWSTR,
@@ -263,20 +263,20 @@ impl windows::Win32::System::Com::IDispatch_Impl for Connect_Impl {
         }
         // Ribbon callbacks are always invoked by member name only (no named
         // arguments), so we only need to resolve the first entry.
-        let name = (*rgsz_names).to_string().unwrap_or_default();
+        let name = unsafe { (*rgsz_names).to_string().unwrap_or_default() };
         match dispid_for_name(&name) {
             Some(id) => {
-                *rg_disp_id = id;
+                unsafe { *rg_disp_id = id };
                 Ok(())
             }
             None => {
-                *rg_disp_id = -1;
+                unsafe { *rg_disp_id = -1 };
                 Err(DISP_E_MEMBERNOTFOUND.into())
             }
         }
     }
 
-    unsafe fn Invoke(
+    fn Invoke(
         &self,
         disp_id_member: i32,
         _riid: *const GUID,
@@ -311,7 +311,7 @@ impl windows::Win32::System::Com::IDispatch_Impl for Connect_Impl {
                 // installed .ico via OleLoadPicturePath is tracked in
                 // platform/windows-addin/README.md.
                 if !result.is_null() {
-                    *result = VARIANT::default();
+                    unsafe { *result = VARIANT::default() };
                 }
                 Ok(())
             }

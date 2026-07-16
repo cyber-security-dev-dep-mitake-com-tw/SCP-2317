@@ -17,7 +17,6 @@
 //! duplicate these registry paths.
 
 use super::guids::{CLSID_CONNECT, DESCRIPTION, FRIENDLY_NAME, PROG_ID};
-use std::ffi::c_void;
 use windows::core::{w, HRESULT, GUID};
 use windows::Win32::Foundation::{HMODULE, MAX_PATH};
 use windows::Win32::System::LibraryLoader::{
@@ -41,7 +40,7 @@ unsafe fn dll_path() -> Option<String> {
     )
     .ok()?;
     let mut buf = vec![0u16; MAX_PATH as usize];
-    let len = GetModuleFileNameW(hmodule, &mut buf);
+    let len = GetModuleFileNameW(Some(hmodule), &mut buf);
     if len == 0 {
         return None;
     }
@@ -52,20 +51,22 @@ unsafe fn set_string_value(key: HKEY, name: Option<&[u16]>, value: &str) -> wind
     let mut wide: Vec<u16> = value.encode_utf16().collect();
     wide.push(0);
     let bytes = std::slice::from_raw_parts(wide.as_ptr() as *const u8, wide.len() * 2);
-    RegSetValueExW(
-        key,
-        name.map(windows::core::PCWSTR::from_raw)
-            .unwrap_or(windows::core::PCWSTR::null()),
-        0,
-        REG_SZ,
-        Some(bytes),
-    )
-    .ok()
+    let name_ptr = name
+        .map(|n| windows::core::PCWSTR::from_raw(n.as_ptr()))
+        .unwrap_or(windows::core::PCWSTR::null());
+    RegSetValueExW(key, name_ptr, Some(0), REG_SZ, Some(bytes)).ok()
 }
 
 unsafe fn set_dword_value(key: HKEY, name: &[u16], value: u32) -> windows::core::Result<()> {
     let bytes = value.to_le_bytes();
-    RegSetValueExW(key, windows::core::PCWSTR::from_raw(name.as_ptr()), 0, REG_DWORD, Some(&bytes)).ok()
+    RegSetValueExW(
+        key,
+        windows::core::PCWSTR::from_raw(name.as_ptr()),
+        Some(0),
+        REG_DWORD,
+        Some(&bytes),
+    )
+    .ok()
 }
 
 unsafe fn create_key(root: HKEY, subkey: &str) -> windows::core::Result<HKEY> {
@@ -75,7 +76,7 @@ unsafe fn create_key(root: HKEY, subkey: &str) -> windows::core::Result<HKEY> {
     RegCreateKeyExW(
         root,
         windows::core::PCWSTR(wide.as_ptr()),
-        0,
+        Some(0),
         None,
         REG_OPTION_NON_VOLATILE,
         KEY_WRITE,
@@ -104,14 +105,7 @@ unsafe fn register() -> windows::core::Result<()> {
         &format!("Software\\Classes\\CLSID\\{clsid_str}\\InprocServer32"),
     )?;
     set_string_value(inproc_key, None, &dll)?;
-    let mut threading_model: Vec<u16> = "Apartment".encode_utf16().collect();
-    threading_model.push(0);
-    set_string_value(
-        inproc_key,
-        Some(w!("ThreadingModel").as_wide()),
-        "Apartment",
-    )?;
-    let _ = threading_model;
+    set_string_value(inproc_key, Some(w!("ThreadingModel").as_wide()), "Apartment")?;
     RegCloseKey(inproc_key).ok()?;
 
     let progid_key = create_key(
@@ -181,12 +175,4 @@ unsafe extern "system" fn DllUnregisterServer() -> HRESULT {
         Ok(()) => windows::Win32::Foundation::S_OK,
         Err(e) => e.code(),
     }
-}
-
-// Silences an "unused function" warning on non-Windows check builds of this
-// cfg(windows)-only module when `dll_path`'s address-of trick is optimized
-// away; kept as a real code path, not a test shim.
-#[allow(dead_code)]
-fn _assert_send_sync() {
-    let _ = c_void::default;
 }

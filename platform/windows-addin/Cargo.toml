@@ -18,7 +18,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # No TLS backend: the API is only ever called over http://127.0.0.1, so we
 # avoid pulling in a TLS stack (and its C build dependencies) entirely.
-ureq = { version = "2", default-features = false }
+ureq = { version = "2", default-features = false, features = ["json"] }
 
 [target.'cfg(windows)'.dependencies]
 # windows-implement/windows-interface generate code that refers to the

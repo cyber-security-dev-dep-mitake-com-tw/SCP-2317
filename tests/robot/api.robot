@@ -36,6 +36,24 @@ Malicious Fixture Is Malicious
     Should Be Equal    ${status}    malicious
     Should Be Equal As Integers    ${score}    55
 
+BEC Fixture Is Malicious
+    ${payload}=    Load Json File    ${SAMPLES_DIR}/bec.json
+    ${verdict}=    Post Json    ${BASE_URL}/v1/email/scan    ${payload}
+    ${status}=    Get From Dictionary    ${verdict}    status
+    Should Be Equal    ${status}    malicious
+
+Quishing Fixture Is Flagged
+    ${payload}=    Load Json File    ${SAMPLES_DIR}/quishing.json
+    ${verdict}=    Post Json    ${BASE_URL}/v1/email/scan    ${payload}
+    ${status}=    Get From Dictionary    ${verdict}    status
+    Should Not Be Equal    ${status}    clean
+
+Outbound DLP Blocks Card Number
+    ${payload}=    Load Json File    ${SAMPLES_DIR}/dlp_outbound.json
+    ${verdict}=    Post Json    ${BASE_URL}/v1/email/scan    ${payload}
+    ${status}=    Get From Dictionary    ${verdict}    status
+    Should Be Equal    ${status}    malicious
+
 Missing Message Id Returns Structured Error
     ${payload}=    Evaluate    {'sender': 'a@b.test', 'subject': 'x'}
     ${error}=    Post Json Expect Error    ${BASE_URL}/v1/email/scan    ${payload}    400

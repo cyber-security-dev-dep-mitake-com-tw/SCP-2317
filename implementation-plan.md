@@ -103,6 +103,26 @@ existing behavior/tests keep working.
 Real AV/YARA/ClamAV, executing sandbox/CDR, ICES tenant API, clawback, RBI,
 PQC, WORM/eDiscovery, global threat-intel, automated take-down, MFA/IAM.
 
+## 4b. Verification results (implemented)
+
+All items below are done and verified locally on 2026-07-16:
+
+- `go test ./...` — pass (new packages `internal/qr`, `internal/llm`, plus new
+  scanner engine tests; existing tests unchanged and green).
+- `go vet ./...` — clean. Add-in `tsc` — clean. `cargo test` (windows-addin
+  portable modules) — 7 pass.
+- Robot Framework smoke — 9/9 pass, including new `bec`, `quishing`, and
+  outbound-`dlp` fixtures.
+- **End-to-end reproduction of the observed gap:** the quishing/BEC/spoof email
+  that previously returned `CLEAN (score 0)` now returns `MALICIOUS (score 100)`
+  with three findings — DMARC fail, social-engineering language, and a QR URL
+  the server decoded directly from the PNG (`http://xn--secure-login.example/verify`).
+
+Engines shipped: authentication, spoofing, social-engineering, quishing (real
+pure-Go QR decode of inline images), outbound DLP, plus the optional LLM
+analyzer (OpenAI/Grok/Mistral, off by default). Clients (Office.js + Rust) send
+the new signals; Office.js `OnMessageSend` blocks sends on a DLP hit.
+
 ## 5. Rollout order
 1. Model + policy fields (back-compatible).
 2. Refactor URL/attachment engines to categories.

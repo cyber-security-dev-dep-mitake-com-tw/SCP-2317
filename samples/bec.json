@@ -1,0 +1,11 @@
+{
+  "message_id": "sample-bec",
+  "sender": "ceo@micros0ft-finance.test",
+  "sender_display": "Microsoft CEO",
+  "reply_to": "collect@attacker.test",
+  "auth_results": "mx.example.com; spf=pass; dkim=pass; dmarc=fail (p=reject)",
+  "subject": "URGENT: change of bank account for today's wire transfer",
+  "body_preview": "This is urgent and confidential. Per the CEO, please update payment details and complete the wire transfer immediately before the account will expire.",
+  "urls": [],
+  "attachments": []
+}

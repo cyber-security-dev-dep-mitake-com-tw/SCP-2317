@@ -118,6 +118,21 @@ components:
           type: string
         sender:
           type: string
+        sender_display:
+          type: string
+          description: From header display name (used for spoof detection).
+        reply_to:
+          type: string
+          description: Reply-To address; a mismatch with sender is flagged.
+        auth_results:
+          type: string
+          description: >
+            Raw Authentication-Results header the client read from the message.
+            The API interprets SPF/DKIM/DMARC results; it never performs DNS.
+        direction:
+          type: string
+          enum: [inbound, outbound]
+          description: Outbound enables data-loss-prevention (DLP) checks.
         subject:
           type: string
         body_preview:
@@ -126,15 +141,28 @@ components:
           type: array
           items:
             type: string
+        qr_urls:
+          type: array
+          items:
+            type: string
+          description: URLs a client decoded from QR images (quishing).
         attachments:
           type: array
           items:
             $ref: "#/components/schemas/Artifact"
+          description: >
+            Inline image attachments (data_base64) are decoded server-side and
+            scanned for QR codes; content is never executed.
     Finding:
       type: object
       properties:
         engine:
           type: string
+        category:
+          type: string
+          description: >
+            Engine group: authentication, spoofing, social-engineering,
+            quishing, dlp, url, or attachment.
         severity:
           type: string
         summary:

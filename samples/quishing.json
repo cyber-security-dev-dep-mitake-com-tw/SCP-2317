@@ -1,0 +1,15 @@
+{
+  "message_id": "sample-quishing",
+  "sender": "no-reply@security-alerts.test",
+  "sender_display": "資安研發部",
+  "subject": "Don't lose access - scan to verify",
+  "body_preview": "請掃描 QR code 以立即驗證您的帳戶，這裡下載圖片。",
+  "urls": [],
+  "qr_urls": ["http://xn--secure-login.example/verify"],
+  "attachments": [
+    {
+      "name": "invoice-merged.pdf.png",
+      "content_type": "image/png"
+    }
+  ]
+}

@@ -23,7 +23,9 @@
   <FormSettings>
     <Form xsi:type="ItemRead"><DesktopSettings><SourceLocation DefaultValue="https://localhost:3000/taskpane.html"/><RequestedHeight>250</RequestedHeight></DesktopSettings></Form>
   </FormSettings>
-  <Permissions>ReadItem</Permissions>
+  <!-- ReadWriteItem is required so the OnMessageSend DLP handler can read the
+       body of the message being composed. -->
+  <Permissions>ReadWriteItem</Permissions>
   <Rule xsi:type="RuleCollection" Mode="Or"><Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/></Rule>
 
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
@@ -47,6 +49,12 @@
       </Requirements>
       <Hosts>
         <Host xsi:type="MailHost">
+          <!-- Event-based activation runtime for the OnMessageSend DLP handler.
+               Requires Mailbox requirement set 1.12 on the host (classic and
+               new Outlook for Windows). Older hosts ignore the LaunchEvent. -->
+          <Runtimes>
+            <Runtime resid="Commands.Url" lifetime="short"/>
+          </Runtimes>
           <DesktopFormFactor>
             <FunctionFile resid="Commands.Url"/>
             <ExtensionPoint xsi:type="MessageReadCommandSurface">
@@ -149,6 +157,14 @@
                 </Group>
                 <Label resid="TabLabel"/>
               </CustomTab>
+            </ExtensionPoint>
+            <!-- Outbound DLP: block/prompt on send when sensitive data is found.
+                 SendMode="PromptUser" soft-blocks so the user can override. -->
+            <ExtensionPoint xsi:type="LaunchEvent">
+              <LaunchEvents>
+                <LaunchEvent Type="OnMessageSend" FunctionName="onMessageSend" SendMode="PromptUser"/>
+              </LaunchEvents>
+              <SourceLocation resid="Commands.Url"/>
             </ExtensionPoint>
           </DesktopFormFactor>
         </Host>

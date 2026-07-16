@@ -31,6 +31,32 @@ function getBodyPreview(item: Office.MessageRead): Promise<string> {
   });
 }
 
+/** Reads the Authentication-Results header so the API can surface SPF/DKIM/DMARC
+ *  outcomes. Resolves to "" when the host/API set does not expose headers. */
+function getAuthResults(item: Office.MessageRead): Promise<string> {
+  return new Promise((resolve) => {
+    const anyItem = item as unknown as {
+      getAllInternetHeadersAsync?: (
+        cb: (r: Office.AsyncResult<string>) => void
+      ) => void;
+    };
+    if (typeof anyItem.getAllInternetHeadersAsync !== "function") {
+      resolve("");
+      return;
+    }
+    anyItem.getAllInternetHeadersAsync((result) => {
+      if (result.status !== Office.AsyncResultStatus.Succeeded) {
+        resolve("");
+        return;
+      }
+      const line = (result.value || "")
+        .split(/\r?\n/)
+        .find((l) => /^authentication-results:/i.test(l));
+      resolve(line ? line.replace(/^authentication-results:\s*/i, "") : "");
+    });
+  });
+}
+
 export function getCurrentReadItem(): Office.MessageRead {
   const item = Office.context.mailbox.item;
   if (!item) {
@@ -43,6 +69,13 @@ async function buildScanRequest(item: Office.MessageRead) {
   const subject = typeof item.subject === "string" ? item.subject : "";
   const body = await getBodyPreview(item);
   const sender = item.from?.emailAddress || "";
+  const senderDisplay = item.from?.displayName || "";
+  const replyToList = (item as unknown as {
+    replyTo?: Array<{ emailAddress?: string }>;
+  }).replyTo;
+  const replyTo =
+    (replyToList && replyToList[0] && replyToList[0].emailAddress) || "";
+  const authResults = await getAuthResults(item);
   const urls = extractUrls(body);
   const attachments = (item.attachments || []).map((a) => ({
     name: a.name,
@@ -51,6 +84,10 @@ async function buildScanRequest(item: Office.MessageRead) {
   return {
     message_id: item.itemId || "read-item",
     sender,
+    sender_display: senderDisplay,
+    reply_to: replyTo,
+    auth_results: authResults,
+    direction: "inbound",
     subject,
     body_preview: body,
     urls,
@@ -88,6 +125,48 @@ export async function reportSuspicious(
   });
   if (!response.ok) {
     throw new Error(`report failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+function getComposeValue(
+  getter: { getAsync: (cb: (r: Office.AsyncResult<string>) => void) => void }
+): Promise<string> {
+  return new Promise((resolve) => {
+    getter.getAsync((r) =>
+      resolve(r.status === Office.AsyncResultStatus.Succeeded ? r.value || "" : "")
+    );
+  });
+}
+
+/** Scans the message being composed for outbound data loss (DLP). Used by the
+ *  OnMessageSend handler to decide whether to block the send. */
+export async function scanOutgoingItem(): Promise<Verdict> {
+  const item = Office.context.mailbox.item as Office.MessageCompose;
+  const subject = await getComposeValue(item.subject);
+  const body = await new Promise<string>((resolve) => {
+    item.body.getAsync(Office.CoercionType.Text, (r) =>
+      resolve(
+        r.status === Office.AsyncResultStatus.Succeeded
+          ? (r.value || "").slice(0, 8192)
+          : ""
+      )
+    );
+  });
+  const payload = {
+    message_id: "compose-item",
+    direction: "outbound",
+    subject,
+    body_preview: body,
+    urls: extractUrls(body),
+  };
+  const response = await fetch(`${API_BASE}/v1/email/scan`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(`outbound scan failed: ${response.status}`);
   }
   return response.json();
 }

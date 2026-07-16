@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,7 +11,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/example/scp2317-agent/internal/llm"
 	"github.com/example/scp2317-agent/internal/model"
 )
 
@@ -21,6 +24,9 @@ type Policy struct {
 	InlineSizeLimitBytes int      `json:"inline_size_limit_bytes"`
 	MaxURLs              int      `json:"max_urls"`
 	MaxAttachments       int      `json:"max_attachments"`
+	// TrustedDomains are the org's own / known-good sending domains. They anchor
+	// look-alike and display-name-spoof detection.
+	TrustedDomains []string `json:"trusted_domains,omitempty"`
 }
 
 func DefaultPolicy() Policy {
@@ -29,12 +35,19 @@ func DefaultPolicy() Policy {
 		InlineSizeLimitBytes: 10 * 1024 * 1024,
 		MaxURLs:              100,
 		MaxAttachments:       50,
+		TrustedDomains:       []string{},
 	}
 }
 
 type Pipeline struct {
 	policy Policy
+	// analyzer is nil unless an LLM provider is explicitly configured via env.
+	// When set, it augments (never replaces) the offline heuristics.
+	analyzer *llm.Analyzer
 }
+
+// SetAnalyzer attaches an optional LLM analyzer.
+func (p *Pipeline) SetAnalyzer(a *llm.Analyzer) { p.analyzer = a }
 
 var (
 	loadedPolicy Policy
@@ -77,7 +90,11 @@ func loadPolicy() Policy {
 }
 
 func NewPipeline() *Pipeline {
-	return &Pipeline{policy: loadPolicy()}
+	p := &Pipeline{policy: loadPolicy()}
+	if cfg, ok := llm.FromEnv(); ok {
+		p.analyzer = llm.New(cfg)
+	}
+	return p
 }
 
 func NewPipelineWithPolicy(p Policy) *Pipeline {
@@ -131,44 +148,49 @@ func ExtractURLs(explicit []string, body string) []string {
 	return out
 }
 
-// Scan performs bounded, non-executing checks. A production dynamic analyzer
-// must be placed behind the separate, disposable VM worker contract.
-func (p *Pipeline) Scan(r model.EmailScanRequest) model.Verdict {
-	findings, score := []model.Finding{}, 0
-	urls := ExtractURLs(r.URLs, r.BodyPreview)
-	for _, u := range urls {
-		lu := strings.ToLower(u)
-		if strings.HasPrefix(lu, "http://") || strings.Contains(lu, "xn--") {
-			findings = append(findings, model.Finding{
-				Engine:   "url-heuristics",
-				Severity: "medium",
-				Summary:  "URL uses cleartext HTTP or punycode",
-			})
-			score += 25
-		}
+// severityScore maps a severity label to its default score weight.
+func severityScore(sev string) int {
+	switch sev {
+	case "high":
+		return 55
+	case "medium":
+		return 25
+	case "low":
+		return 10
+	default:
+		return 0
 	}
-	for _, a := range r.Attachments {
-		name := strings.ToLower(a.Name)
-		for _, ext := range p.policy.HighRiskExtensions {
-			if strings.HasSuffix(name, strings.ToLower(ext)) {
-				findings = append(findings, model.Finding{
-					Engine:   "attachment-policy",
-					Severity: "high",
-					Summary:  "High-risk attachment type: " + ext,
-				})
-				score += 55
-			}
-		}
-		if a.DataBase64 != "" {
-			if b, err := base64.StdEncoding.DecodeString(a.DataBase64); err == nil && len(b) > p.policy.InlineSizeLimitBytes {
-				findings = append(findings, model.Finding{
-					Engine:   "size-policy",
-					Severity: "low",
-					Summary:  "Attachment exceeds inline scan limit",
-				})
-				score += 10
-			}
-		}
+}
+
+// Scan performs bounded, non-executing checks across every heuristic engine.
+// A production dynamic analyzer must be placed behind the separate, disposable
+// VM worker contract; nothing here executes attachment content.
+func (p *Pipeline) Scan(r model.EmailScanRequest) model.Verdict {
+	findings := []model.Finding{}
+	urls := ExtractURLs(r.URLs, r.BodyPreview)
+
+	// Inbound-facing engines.
+	findings = append(findings, p.urlEngine(urls)...)
+	findings = append(findings, p.attachmentEngine(r)...)
+	findings = append(findings, p.authEngine(r)...)
+	findings = append(findings, p.spoofingEngine(r)...)
+	findings = append(findings, p.socialEngine(r)...)
+	findings = append(findings, p.quishingEngine(r)...)
+
+	// Outbound-only engine (data loss prevention).
+	if strings.EqualFold(r.Direction, "outbound") {
+		findings = append(findings, p.dlpEngine(r)...)
+	}
+
+	// Optional LLM augmentation (only when explicitly configured).
+	findings = append(findings, p.llmEngine(r, findings)...)
+
+	score := 0
+	for _, f := range findings {
+		score += severityScore(f.Severity)
+	}
+	if score > 100 {
+		score = 100
 	}
 	status := "clean"
 	if score >= 50 {
@@ -176,8 +198,79 @@ func (p *Pipeline) Scan(r model.EmailScanRequest) model.Verdict {
 	} else if score > 0 {
 		status = "suspicious"
 	}
-	if score > 100 {
-		score = 100
-	}
 	return model.Verdict{Status: status, Score: score, Findings: findings}
+}
+
+// llmEngine augments the heuristics with an optional external LLM assessment.
+// It is a no-op unless an analyzer was configured, and it never downgrades an
+// existing verdict — it can only add a finding.
+func (p *Pipeline) llmEngine(r model.EmailScanRequest, existing []model.Finding) []model.Finding {
+	if p.analyzer == nil {
+		return nil
+	}
+	email := "From: " + r.SenderDisplay + " <" + r.Sender + ">\nSubject: " + r.Subject + "\n\n" + r.BodyPreview
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	as, err := p.analyzer.Analyze(ctx, email)
+	if err != nil {
+		return nil // fail open: offline heuristics already ran
+	}
+	if as.Risk != "high" && !as.IsBEC {
+		return nil
+	}
+	sev := "medium"
+	if as.Risk == "high" {
+		sev = "high"
+	}
+	summary := "LLM flagged likely BEC/phishing intent"
+	if as.Reason != "" {
+		summary += ": " + as.Reason
+	}
+	return []model.Finding{{
+		Engine: "llm-analyzer", Category: "social-engineering", Severity: sev, Summary: summary,
+	}}
+}
+
+func (p *Pipeline) urlEngine(urls []string) []model.Finding {
+	var out []model.Finding
+	for _, u := range urls {
+		lu := strings.ToLower(u)
+		if strings.HasPrefix(lu, "http://") || strings.Contains(lu, "xn--") {
+			out = append(out, model.Finding{
+				Engine:   "url-heuristics",
+				Category: "url",
+				Severity: "medium",
+				Summary:  "URL uses cleartext HTTP or punycode: " + u,
+			})
+		}
+	}
+	return out
+}
+
+func (p *Pipeline) attachmentEngine(r model.EmailScanRequest) []model.Finding {
+	var out []model.Finding
+	for _, a := range r.Attachments {
+		name := strings.ToLower(a.Name)
+		for _, ext := range p.policy.HighRiskExtensions {
+			if strings.HasSuffix(name, strings.ToLower(ext)) {
+				out = append(out, model.Finding{
+					Engine:   "attachment-policy",
+					Category: "attachment",
+					Severity: "high",
+					Summary:  "High-risk attachment type: " + ext,
+				})
+			}
+		}
+		if a.DataBase64 != "" {
+			if b, err := base64.StdEncoding.DecodeString(a.DataBase64); err == nil && len(b) > p.policy.InlineSizeLimitBytes {
+				out = append(out, model.Finding{
+					Engine:   "size-policy",
+					Category: "attachment",
+					Severity: "low",
+					Summary:  "Attachment exceeds inline scan limit",
+				})
+			}
+		}
+	}
+	return out
 }

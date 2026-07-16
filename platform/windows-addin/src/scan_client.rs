@@ -39,6 +39,16 @@ pub struct EmailScanRequest {
     pub body_preview: String,
     pub urls: Vec<String>,
     pub attachments: Vec<Attachment>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub sender_display: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub reply_to: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub auth_results: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub direction: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub qr_urls: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -134,7 +144,33 @@ pub fn build_request(
         urls: extract_urls(body_preview),
         body_preview: body_preview.to_string(),
         attachments,
+        sender_display: String::new(),
+        reply_to: String::new(),
+        auth_results: String::new(),
+        direction: String::new(),
+        qr_urls: Vec::new(),
     }
+}
+
+/// Builder variant that carries the richer identity signals classic Outlook can
+/// read from a MAPI message (display name, reply-to, Authentication-Results).
+#[allow(clippy::too_many_arguments)]
+pub fn build_request_full(
+    message_id: &str,
+    sender: &str,
+    sender_display: &str,
+    reply_to: &str,
+    auth_results: &str,
+    subject: &str,
+    body_preview: &str,
+    attachments: Vec<Attachment>,
+) -> EmailScanRequest {
+    let mut req = build_request(message_id, sender, subject, body_preview, attachments);
+    req.sender_display = sender_display.to_string();
+    req.reply_to = reply_to.to_string();
+    req.auth_results = auth_results.to_string();
+    req.direction = "inbound".to_string();
+    req
 }
 
 pub fn verdict_text(v: &Verdict) -> String {

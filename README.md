@@ -1,6 +1,24 @@
 # SCP-2317 Agent Starter
 
-SCP-2317 is a defensive starter monorepo for email protection on Windows and macOS, plus a safe scanning backend. It is deliberately an MVP: the default scanner performs metadata and URL/attachment policy checks and **does not execute untrusted files**.
+SCP-2317 is a defensive starter monorepo for email protection on Windows and macOS, plus a safe scanning backend. It is deliberately an MVP: the scanner performs **non-executing, offline heuristic analysis** across several defense-in-depth engines and **never executes untrusted files**.
+
+## Detection engines
+
+The Go scanner (`internal/scanner`) runs these bounded, offline engines and merges their findings into a single verdict (`clean` / `suspicious` / `malicious`). Each finding carries a `category`.
+
+| Engine | Category | What it catches |
+|---|---|---|
+| URL heuristics | `url` | Cleartext HTTP and punycode links |
+| Attachment policy | `attachment` | High-risk extensions, oversize inline files |
+| Authentication | `authentication` | SPF/DKIM/**DMARC** failures parsed from the `Authentication-Results` header the client supplies (the endpoint never does DNS) |
+| Spoofing | `spoofing` | Homograph/punycode sender domains, From vs Reply-To mismatch, display-name brand impersonation, look-alike/typosquat of a trusted domain |
+| Social-engineering | `social-engineering` | BEC/phishing intent — urgency, authority, payment-change, credential-harvest language in English **and** Traditional Chinese |
+| Quishing | `quishing` | QR-code phishing: inline PNG/JPEG/GIF images are decoded server-side by a bundled pure-Go QR reader (`internal/qr`, Reed-Solomon, zero deps, no network) and the hidden URL is scored |
+| DLP (outbound) | `dlp` | Data loss on send: Luhn-valid card numbers, Taiwan national IDs, private keys, AWS keys, plaintext passwords |
+
+Optional, **disabled-by-default** LLM augmentation (`internal/llm`) can escalate ambiguous mail via OpenAI-, Grok (xAI)-, or Mistral-format `/chat/completions` APIs. It is only active when `SCP2317_LLM_API_KEY` is set, so the default build stays fully offline. See [`implementation-plan.md`](implementation-plan.md).
+
+The Office.js add-in sends the identity signals it can read (display name, Reply-To, `Authentication-Results`) and blocks outbound sends that trip DLP via an `OnMessageSend` handler. Everything remains metadata/heuristic; **no attachment is ever executed**.
 
 ## Components
 
@@ -10,7 +28,9 @@ SCP-2317 is a defensive starter monorepo for email protection on Windows and mac
 | `platform/windows-addin/` | Native classic Outlook COM add-in | Installer-registered Ribbon add-in; no manifest sideload |
 | `platform/windows-mapi/` | Classic Outlook/MAPI native provider | Buildable Rust scaffold (no MAPI calls) |
 | `platform/macos-es/` | macOS Endpoint Security system extension core | Buildable Swift scaffold; entitlement required |
-| `cmd/api`, `internal/` | Go scan API, heuristic scanner, sandbox stub | Runnable MVP |
+| `cmd/api`, `internal/` | Go scan API, multi-engine heuristic scanner, sandbox stub | Runnable MVP |
+| `internal/qr` | Pure-Go QR decoder/encoder (quishing) | Unit-tested, zero deps |
+| `internal/llm` | Optional OpenAI/Grok/Mistral analyzer (off by default) | Unit-tested via httptest |
 | `api/openapi.yaml` | HTTP contract | Synced with handlers |
 | `rules/attachment_policy.json` | High-risk extension / size limits | Loaded by scanner |
 | `samples/` | Clean / suspicious / malicious fixtures | Used by Robot tests |
@@ -26,7 +46,15 @@ curl -sS http://127.0.0.1:8080/v1/email/scan \
   -d '{"message_id":"demo","sender":"billing@example.test","subject":"invoice","urls":["http://xn--demo.test"],"attachments":[{"name":"invoice.exe","content_type":"application/octet-stream"}]}'
 ```
 
-Or run `docker compose up --build`. The service binds only to localhost.
+Or run `docker compose up --build`. The service binds only to localhost. Override the listen address with `SCP2317_ADDR` (default `127.0.0.1:8080`).
+
+To enable the optional LLM analyzer (otherwise fully offline):
+
+```bash
+export SCP2317_LLM_API_KEY=sk-...        # required to enable
+export SCP2317_LLM_FORMAT=openai         # openai | grok | mistral
+# optional overrides: SCP2317_LLM_BASE_URL, SCP2317_LLM_MODEL
+```
 
 ## Release packages (GitHub Actions)
 

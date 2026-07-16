@@ -4,6 +4,7 @@ import {
   getCurrentReadItem,
   reportSuspicious,
   scanCurrentItem,
+  scanOutgoingItem,
   Verdict,
 } from "./scpApi.js";
 
@@ -100,9 +101,38 @@ function onShowAbout(event: Office.AddinCommands.Event) {
   event.completed();
 }
 
+// OnMessageSend: block the send when outbound DLP finds sensitive data. This is
+// a smart-alert send handler; the manifest must declare the LaunchEvent + a
+// SendMode of "PromptUser" (soft block) or "Block" (hard block).
+async function onMessageSend(event: Office.AddinCommands.Event) {
+  try {
+    const verdict = await scanOutgoingItem();
+    const dlpHit = (verdict.findings || []).some(
+      (f) => f.engine === "dlp" && f.severity === "high"
+    );
+    if (dlpHit) {
+      notify(
+        "scp2317-dlp",
+        Office.MailboxEnums.ItemNotificationMessageType.ErrorMessage,
+        "SCP-2317 blocked this message: it appears to contain sensitive data (card number / ID / key)."
+      );
+      (event as unknown as {
+        completed: (o: { allowEvent: boolean }) => void;
+      }).completed({ allowEvent: false });
+      return;
+    }
+  } catch {
+    // Fail open: never trap a user's mail because the local scanner is down.
+  }
+  (event as unknown as {
+    completed: (o: { allowEvent: boolean }) => void;
+  }).completed({ allowEvent: true });
+}
+
 Office.onReady(() => {
   Office.actions.associate("onQuickScan", onQuickScan);
   Office.actions.associate("onReportSuspicious", onReportSuspicious);
   Office.actions.associate("onCheckStatus", onCheckStatus);
   Office.actions.associate("onShowAbout", onShowAbout);
+  Office.actions.associate("onMessageSend", onMessageSend);
 });

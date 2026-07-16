@@ -2,5 +2,6 @@
   "high_risk_extensions": [".exe", ".dll", ".js", ".vbs", ".lnk", ".iso", ".scr", ".bat", ".cmd"],
   "inline_size_limit_bytes": 10485760,
   "max_urls": 100,
-  "max_attachments": 50
+  "max_attachments": 50,
+  "trusted_domains": ["example.com", "paypal.com", "microsoft.com"]
 }

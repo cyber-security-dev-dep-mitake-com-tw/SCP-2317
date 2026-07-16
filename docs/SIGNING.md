@@ -52,6 +52,22 @@ Export-PfxCertificate -Cert $c -FilePath cert.pfx -Password $pw
 [Convert]::ToBase64String([IO.File]::ReadAllBytes('cert.pfx')) | Set-Content cert.pfx.b64
 ```
 
+### What "signed" looks like in CI for a self-signed cert
+
+The workflow's **Verify signatures** step runs `Get-AuthenticodeSignature`:
+
+| Status | Meaning | CI result |
+|---|---|---|
+| `Valid` | signed **and** chain trusted (OV/EV cert) | pass |
+| `UnknownError` (with a signer certificate) | signed, but the chain is not trusted on the runner — **normal for self-signed** | pass, with a warning |
+| `NotSigned` | no signature (e.g. secrets missing) | fail |
+| `HashMismatch` | file tampered after signing | fail |
+
+So a self-signed cert produces a **valid signature** with an **untrusted chain**;
+the step accepts that and only fails on genuinely unsigned or tampered files.
+End users on Windows will still see the "unknown publisher" prompt until you move
+to a CA-issued cert.
+
 ## Option B — trusted CA (paid, for distribution)
 
 Buy an **OV** or **EV** code-signing cert from a CA (DigiCert, Sectigo, SSL.com,

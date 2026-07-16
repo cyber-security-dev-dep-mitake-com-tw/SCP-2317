@@ -52,6 +52,7 @@ jobs:
       - name: Required files exist
         run: |
           test -f .gitlab-ci.yml
+          test -f .github/workflows/package.yml
           test -f scripts/gitlab/package-macos.sh
           test -f scripts/gitlab/package-windows.ps1
           test -f scripts/gitlab/run-robot.sh
@@ -59,3 +60,6 @@ jobs:
           test -f tests/robot/resources/ApiLibrary.py
           test -f api/openapi.yaml
           test -f rules/attachment_policy.json
+          test -f assets/logo.ico
+          test -f assets/logo.icns
+          test -f assets/logo.png

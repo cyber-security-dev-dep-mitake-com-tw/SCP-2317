@@ -27,6 +27,30 @@ curl -sS http://127.0.0.1:8080/v1/email/scan \
 
 Or run `docker compose up --build`. The service binds only to localhost.
 
+## Release packages (GitHub Actions)
+
+Workflow: [`.github/workflows/package.yml`](.github/workflows/package.yml)
+
+Triggers: push to `main`/`master`, version tags (`v*`), or **Run workflow** (manual dispatch).
+
+| Runner | Artifacts |
+|---|---|
+| `windows-latest` | `SCP-2317-Setup.exe`, `SCP-2317.msi` |
+| `macos-14` (Apple Silicon) | `SCP-2317.pkg`, `SCP-2317.dmg` |
+| `macos-13` (Intel) | `SCP-2317.pkg`, `SCP-2317.dmg` |
+
+Artifacts are unsigned developer builds. Installers embed the SCP-2317 logo from `assets/logo.*` (see `assets/ATTRIBUTION.md`).
+
+Local packaging:
+
+```bash
+# macOS
+bash scripts/gitlab/package-macos.sh
+
+# Windows (Inno Setup 6 + WiX 4 required)
+powershell -File scripts/gitlab/package-windows.ps1
+```
+
 ## Verification and release scaffolding
 
 | Item | Status |
@@ -35,8 +59,10 @@ Or run `docker compose up --build`. The service binds only to localhost.
 | Robot Framework API smoke (`make test-robot`) | Verified when Python + robotframework installed |
 | Outlook add-in typecheck (`make build-addin`) | Verified via `tsc` |
 | GitHub Actions (`.github/workflows/ci.yml`) | Present: unit, robot, add-in, scaffold checks |
+| GitHub Actions package (`.github/workflows/package.yml`) | Windows `.exe`/`.msi` + macOS `.pkg`/`.dmg` on tag/main or manual dispatch |
 | GitLab CI (`.gitlab-ci.yml`) | Present: lint/unit/robot; package jobs manual + runner-tagged |
 | Packaging scripts (`scripts/gitlab/`) | Present; require Windows/macOS toolchains |
+| App logo (`assets/logo.png`, `.ico`, `.icns`) | SCP-2317 artwork (see `assets/ATTRIBUTION.md`) |
 | Installer sources (`installer/windows/`) | Present (unsigned) |
 | Release report (`docs/reports/`) | Updated for this patch |
 

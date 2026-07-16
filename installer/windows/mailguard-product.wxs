@@ -7,13 +7,15 @@
     UpgradeCode="{D7E6C3D2-6A6B-42D0-83E3-4B2B5E5FD5B1}">
     <MajorUpgrade DowngradeErrorMessage="A newer version of SCP-2317 is already installed." />
     <MediaTemplate />
+    <Icon Id="AppIcon" SourceFile="..\..\assets\logo.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <Feature Id="MainFeature" Title="SCP-2317" Level="1">
       <ComponentGroupRef Id="SCP2317Components" />
     </Feature>
   </Package>
 
   <Fragment>
-    <StandardDirectory Id="ProgramFilesFolder">
+    <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="SCP-2317" />
     </StandardDirectory>
   </Fragment>
@@ -22,6 +24,12 @@
     <ComponentGroup Id="SCP2317Components" Directory="INSTALLFOLDER">
       <Component Id="SCP2317ApiComponent" Guid="{A5C49D62-0D2B-4F3B-9E0F-7D8F3A0D6B6A}">
         <File Source="..\..\dist\windows\payload\SCP-2317\scp2317-api.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="SCP2317IconComponent" Guid="{B1C2D3E4-5F60-4A71-8B92-0C1D2E3F4A5B}">
+        <File Source="..\..\assets\logo.ico" Name="scp2317.ico" />
+      </Component>
+      <Component Id="SCP2317LogoComponent" Guid="{C2D3E4F5-6071-4B82-9C03-1D2E3F4A5B6C}">
+        <File Source="..\..\assets\logo.png" Name="logo.png" />
       </Component>
     </ComponentGroup>
   </Fragment>

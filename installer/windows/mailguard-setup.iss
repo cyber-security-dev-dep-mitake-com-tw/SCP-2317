@@ -18,9 +18,20 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64
 DisableProgramGroupPage=yes
 LicenseFile=..\..\LICENSE
+SetupIconFile=..\..\assets\logo.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
+WizardStyle=modern
+MinVersion=10.0
+PrivilegesRequired=admin
 
 [Files]
 Source: "..\..\dist\windows\payload\SCP-2317\scp2317-api.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\assets\logo.ico"; DestDir: "{app}"; DestName: "scp2317.ico"; Flags: ignoreversion
+Source: "..\..\assets\logo.png"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\scp2317.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\scp2317.ico"; Tasks: desktopicon
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked

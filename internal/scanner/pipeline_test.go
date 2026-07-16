@@ -1,88 +1,99 @@
 package scanner
 
 import (
-	"bytes"
 	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/example/scp2317-agent/internal/model"
 )
 
-func TestScanCleanMessage(t *testing.T) {
+func TestScanCleanHTTPS(t *testing.T) {
 	v := NewPipeline().Scan(model.EmailScanRequest{
-		MessageID:   "clean",
-		Sender:      "sender@example.test",
-		Subject:     "Quarterly update",
-		BodyPreview: "Hello",
-		URLs:        []string{"https://example.com"},
+		MessageID: "t1",
+		URLs:      []string{"https://example.com"},
 	})
-
-	if v.Status != "clean" {
-		t.Fatalf("expected clean, got %s", v.Status)
-	}
-	if v.Score != 0 {
-		t.Fatalf("expected score 0, got %d", v.Score)
-	}
-	if len(v.Findings) != 0 {
-		t.Fatalf("expected no findings, got %d", len(v.Findings))
+	if v.Status != "clean" || v.Score != 0 {
+		t.Fatalf("%+v", v)
 	}
 }
 
-func TestScanSuspiciousURL(t *testing.T) {
+func TestScanSuspiciousPunycodeHTTP(t *testing.T) {
 	v := NewPipeline().Scan(model.EmailScanRequest{
-		MessageID:   "url",
-		Sender:      "sender@example.test",
-		Subject:     "Suspicious link",
-		BodyPreview: "Click carefully",
-		URLs:        []string{"http://xn--demo.test"},
+		MessageID: "t2",
+		URLs:      []string{"http://xn--demo.test"},
 	})
+	if v.Status != "suspicious" || v.Score != 25 {
+		t.Fatalf("%+v", v)
+	}
+}
 
+func TestScanMaliciousExecutable(t *testing.T) {
+	v := NewPipeline().Scan(model.EmailScanRequest{
+		MessageID: "t3",
+		Attachments: []model.Artifact{{
+			Name:        "invoice.exe",
+			ContentType: "application/octet-stream",
+		}},
+	})
+	if v.Status != "malicious" || v.Score != 55 {
+		t.Fatalf("%+v", v)
+	}
+}
+
+func TestScanOversizedInlineAttachment(t *testing.T) {
+	data := base64.StdEncoding.EncodeToString(make([]byte, 10*1024*1024+1))
+	v := NewPipeline().Scan(model.EmailScanRequest{
+		MessageID: "t4",
+		Attachments: []model.Artifact{{
+			Name:       "big.bin",
+			DataBase64: data,
+		}},
+	})
+	if v.Status != "suspicious" || v.Score != 10 {
+		t.Fatalf("%+v", v)
+	}
+}
+
+func TestExtractURLsFromBody(t *testing.T) {
+	urls := ExtractURLs(nil, "See http://xn--phish.test/login and https://safe.example/")
+	if len(urls) != 2 {
+		t.Fatalf("got %v", urls)
+	}
+	v := NewPipeline().Scan(model.EmailScanRequest{
+		MessageID:   "t5",
+		BodyPreview: "Click http://evil.test now",
+	})
 	if v.Status != "suspicious" {
-		t.Fatalf("expected suspicious, got %s", v.Status)
-	}
-	if v.Score != 25 {
-		t.Fatalf("expected score 25, got %d", v.Score)
+		t.Fatalf("%+v", v)
 	}
 }
 
-func TestScanExecutableAttachment(t *testing.T) {
-	v := NewPipeline().Scan(model.EmailScanRequest{
-		MessageID: "attach",
-		Sender:    "sender@example.test",
-		Subject:   "Attachment risk",
-		Attachments: []model.Artifact{
-			{Name: "invoice.exe", ContentType: "application/octet-stream"},
-		},
-	})
-
-	if v.Status != "malicious" {
-		t.Fatalf("expected malicious, got %s", v.Status)
-	}
-	if v.Score != 55 {
-		t.Fatalf("expected score 55, got %d", v.Score)
-	}
-	if len(v.Findings) == 0 {
-		t.Fatal("expected findings for executable attachment")
+func TestValidateRequiresMessageID(t *testing.T) {
+	err := NewPipeline().Validate(model.EmailScanRequest{})
+	if err == nil || !strings.Contains(err.Error(), "message_id") {
+		t.Fatalf("err=%v", err)
 	}
 }
 
-func TestScanLargeInlineAttachment(t *testing.T) {
-	payload := bytes.Repeat([]byte{0}, 10*1024*1024+1)
-	encoded := base64.StdEncoding.EncodeToString(payload)
-
-	v := NewPipeline().Scan(model.EmailScanRequest{
-		MessageID: "large",
-		Sender:    "sender@example.test",
-		Subject:   "Large payload",
-		Attachments: []model.Artifact{
-			{Name: "archive.zip", ContentType: "application/zip", DataBase64: encoded},
-		},
+func TestValidateRejectsBadBase64(t *testing.T) {
+	err := NewPipeline().Validate(model.EmailScanRequest{
+		MessageID: "t6",
+		Attachments: []model.Artifact{{
+			Name:       "x.bin",
+			DataBase64: "%%%",
+		}},
 	})
-
-	if v.Status != "suspicious" {
-		t.Fatalf("unexpected status %s", v.Status)
+	if err == nil {
+		t.Fatal("expected error")
 	}
-	if v.Score != 10 {
-		t.Fatalf("expected score 10, got %d", v.Score)
+}
+
+func TestValidateMaxURLs(t *testing.T) {
+	p := NewPipelineWithPolicy(Policy{MaxURLs: 2, MaxAttachments: 10, HighRiskExtensions: []string{".exe"}, InlineSizeLimitBytes: 1})
+	urls := make([]string, 3)
+	err := p.Validate(model.EmailScanRequest{MessageID: "t7", URLs: urls})
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }

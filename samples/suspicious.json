@@ -1,0 +1,8 @@
+{
+  "message_id": "sample-suspicious",
+  "sender": "alerts@example.test",
+  "subject": "Suspicious link",
+  "body_preview": "Click carefully",
+  "urls": ["http://xn--demo.test"],
+  "attachments": []
+}

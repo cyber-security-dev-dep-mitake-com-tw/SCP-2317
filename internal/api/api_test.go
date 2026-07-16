@@ -7,68 +7,110 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/example/scp2317-agent/internal/scanner"
+	"github.com/example/scp2317-agent/internal/model"
 )
 
-func TestRoutesHealthz(t *testing.T) {
-	h := New(scanner.NewPipeline())
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	rec := httptest.NewRecorder()
-
-	h.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
-	if body := rec.Body.String(); body != "ok" {
-		t.Fatalf("expected ok body, got %q", body)
+func TestHealthz(t *testing.T) {
+	srv := New(nil).Routes()
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if rr.Code != 200 || rr.Body.String() != "ok" {
+		t.Fatalf("%d %q", rr.Code, rr.Body.String())
 	}
 }
 
-func TestScanRejectsInvalidJSON(t *testing.T) {
-	h := New(scanner.NewPipeline())
-	req := httptest.NewRequest(http.MethodPost, "/v1/email/scan", bytes.NewBufferString("{"))
-	rec := httptest.NewRecorder()
-
-	h.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rec.Code)
+func TestScanInvalidJSON(t *testing.T) {
+	srv := New(nil).Routes()
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/email/scan", bytes.NewBufferString("{")))
+	if rr.Code != 400 {
+		t.Fatalf("code=%d", rr.Code)
+	}
+	var ae model.APIError
+	if err := json.Unmarshal(rr.Body.Bytes(), &ae); err != nil || ae.Error == "" {
+		t.Fatalf("body=%s", rr.Body.String())
 	}
 }
 
-func TestScanReturnsVerdict(t *testing.T) {
-	h := New(scanner.NewPipeline())
-	body := map[string]any{
-		"message_id": "demo",
-		"sender":     "sender@example.test",
-		"subject":    "invoice",
-		"urls":       []string{"http://xn--demo.test"},
-		"attachments": []map[string]any{
-			{"name": "invoice.exe", "content_type": "application/octet-stream"},
-		},
+func TestScanMissingMessageID(t *testing.T) {
+	srv := New(nil).Routes()
+	body, _ := json.Marshal(map[string]any{"sender": "a@b.test", "subject": "x"})
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/email/scan", bytes.NewReader(body)))
+	if rr.Code != 400 {
+		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
 	}
-	payload, err := json.Marshal(body)
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
+}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/email/scan", bytes.NewReader(payload))
-	rec := httptest.NewRecorder()
+func TestScanMaliciousVerdictJSONTags(t *testing.T) {
+	srv := New(nil).Routes()
+	payload := model.EmailScanRequest{
+		MessageID: "demo",
+		Sender:    "billing@example.test",
+		Subject:   "invoice",
+		URLs:      []string{"http://xn--demo.test"},
+		Attachments: []model.Artifact{{
+			Name:        "invoice.exe",
+			ContentType: "application/octet-stream",
+		}},
+	}
+	body, _ := json.Marshal(payload)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/email/scan", bytes.NewReader(body))
+	srv.ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("code=%d", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("ct=%s", ct)
+	}
+	var v model.Verdict
+	if err := json.Unmarshal(rr.Body.Bytes(), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Status != "malicious" {
+		t.Fatalf("%+v", v)
+	}
+	if len(v.Findings) == 0 || v.Findings[0].Engine == "" {
+		t.Fatalf("findings missing snake json fields: %s", rr.Body.String())
+	}
+	raw := rr.Body.String()
+	if !bytes.Contains(rr.Body.Bytes(), []byte(`"engine"`)) {
+		t.Fatalf("expected lowercase engine tag in %s", raw)
+	}
+}
 
-	h.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
+func TestSandboxSubmitStatusReport(t *testing.T) {
+	srv := New(nil).Routes()
+	body, _ := json.Marshal(map[string]string{
+		"hash": "deadbeef", "objectRef": "s3://bucket/obj", "policy": "default",
+	})
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/sandbox/submit", bytes.NewReader(body)))
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
 	}
-	if contentType := rec.Header().Get("Content-Type"); contentType != "application/json" {
-		t.Fatalf("expected json content type, got %q", contentType)
+	var sub struct {
+		JobID string `json:"job_id"`
 	}
-	var verdict map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &verdict); err != nil {
-		t.Fatalf("unmarshal verdict: %v", err)
+	if err := json.Unmarshal(rr.Body.Bytes(), &sub); err != nil || sub.JobID == "" {
+		t.Fatalf("body=%s", rr.Body.String())
 	}
-	if verdict["status"] != "malicious" {
-		t.Fatalf("expected malicious status, got %#v", verdict["status"])
+	rr2 := httptest.NewRecorder()
+	srv.ServeHTTP(rr2, httptest.NewRequest(http.MethodGet, "/v1/sandbox/status/"+sub.JobID, nil))
+	if rr2.Code != 200 {
+		t.Fatalf("status code=%d", rr2.Code)
+	}
+	rr3 := httptest.NewRecorder()
+	srv.ServeHTTP(rr3, httptest.NewRequest(http.MethodGet, "/v1/sandbox/report/"+sub.JobID, nil))
+	if rr3.Code != 200 {
+		t.Fatalf("report code=%d", rr3.Code)
+	}
+	var rep struct {
+		Status string `json:"status"`
+	}
+	_ = json.Unmarshal(rr3.Body.Bytes(), &rep)
+	if rep.Status != "not_executed" {
+		t.Fatalf("%+v", rep)
 	}
 }

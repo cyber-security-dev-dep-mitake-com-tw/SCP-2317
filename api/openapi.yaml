@@ -1,0 +1,194 @@
+openapi: 3.0.3
+info:
+  title: SCP-2317 Email Scan API
+  version: 0.1.0
+  description: >
+    Heuristic metadata scanner. Attachments are never executed in this process.
+    Dynamic sandbox endpoints acknowledge jobs only (status not_executed).
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+  /v1/email/scan:
+    post:
+      summary: Scan email metadata and optional inline attachments
+      parameters:
+        - name: dynamic
+          in: query
+          schema:
+            type: string
+            enum: ["true", "false"]
+          description: When true, also acknowledges a sandbox stub job (sample still not executed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailScanRequest"
+      responses:
+        "200":
+          description: Verdict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Verdict"
+        "400":
+          description: Validation or decode error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIError"
+  /v1/sandbox/submit:
+    post:
+      summary: Submit sample reference for dynamic analysis (stub)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SandboxSubmitRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SandboxSubmitResponse"
+  /v1/sandbox/status/{jobID}:
+    get:
+      summary: Sandbox job status
+      parameters:
+        - name: jobID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SandboxStatusResponse"
+  /v1/sandbox/report/{jobID}:
+    get:
+      summary: Sandbox findings report
+      parameters:
+        - name: jobID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SandboxReportResponse"
+components:
+  schemas:
+    Artifact:
+      type: object
+      required: [name, content_type]
+      properties:
+        name:
+          type: string
+        content_type:
+          type: string
+        sha256:
+          type: string
+        data_base64:
+          type: string
+    EmailScanRequest:
+      type: object
+      required: [message_id]
+      properties:
+        message_id:
+          type: string
+        sender:
+          type: string
+        subject:
+          type: string
+        body_preview:
+          type: string
+        urls:
+          type: array
+          items:
+            type: string
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Artifact"
+    Finding:
+      type: object
+      properties:
+        engine:
+          type: string
+        severity:
+          type: string
+        summary:
+          type: string
+    Verdict:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [clean, suspicious, malicious]
+        score:
+          type: integer
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Finding"
+    APIError:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: string
+    SandboxSubmitRequest:
+      type: object
+      required: [hash, objectRef]
+      properties:
+        hash:
+          type: string
+        objectRef:
+          type: string
+        policy:
+          type: string
+    SandboxSubmitResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+    SandboxStatusResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          example: not_executed
+    SandboxReportResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Finding"

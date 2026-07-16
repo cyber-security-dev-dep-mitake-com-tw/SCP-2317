@@ -1,0 +1,8 @@
+{
+  "message_id": "sample-clean",
+  "sender": "noreply@example.test",
+  "subject": "Quarterly update",
+  "body_preview": "Hello team, see https://example.com/docs for details.",
+  "urls": ["https://example.com/docs"],
+  "attachments": []
+}

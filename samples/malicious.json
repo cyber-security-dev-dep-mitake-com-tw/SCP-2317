@@ -1,0 +1,13 @@
+{
+  "message_id": "sample-malicious",
+  "sender": "billing@example.test",
+  "subject": "Invoice",
+  "body_preview": "Please review the attached invoice.",
+  "urls": [],
+  "attachments": [
+    {
+      "name": "invoice.exe",
+      "content_type": "application/octet-stream"
+    }
+  ]
+}

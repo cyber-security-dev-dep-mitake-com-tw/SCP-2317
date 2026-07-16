@@ -16,9 +16,20 @@ type EmailScanRequest struct {
 	Attachments []Artifact `json:"attachments,omitempty"`
 }
 
-type Finding struct{ Engine, Severity, Summary string }
+type Finding struct {
+	Engine   string `json:"engine"`
+	Severity string `json:"severity"`
+	Summary  string `json:"summary"`
+}
+
 type Verdict struct {
 	Status   string    `json:"status"`
 	Score    int       `json:"score"`
 	Findings []Finding `json:"findings"`
+}
+
+// APIError is returned for 4xx validation and decode failures.
+type APIError struct {
+	Error   string `json:"error"`
+	Details string `json:"details,omitempty"`
 }

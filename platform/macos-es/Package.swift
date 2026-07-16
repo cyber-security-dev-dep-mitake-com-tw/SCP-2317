@@ -8,6 +8,6 @@ let package = Package(
 		.executable(name: "SCP2317ES", targets: ["SCP2317ES"]),
 	],
 	targets: [
-		.executableTarget(name: "SCP2317ES", path: "Sources/SCP2317ES"),
+		.executableTarget(name: "SCP2317ES", path: "Sources/MailGuardES"),
 	]
 )

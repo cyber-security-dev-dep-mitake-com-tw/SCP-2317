@@ -1,0 +1,94 @@
+stages:
+  - lint
+  - unit-test
+  - robot-test
+  - package
+  - publish
+
+variables:
+  GOPATH: $CI_PROJECT_DIR/.go
+
+.go_cache: &go_cache
+  cache:
+    key: "${CI_COMMIT_REF_SLUG}-go"
+    paths:
+      - .go/
+
+lint:
+  stage: lint
+  image: golang:1.23
+  <<: *go_cache
+  script:
+    - gofmt -l $(find . -name '*.go' -not -path './.go/*') | tee /tmp/gofmt.out
+    - test ! -s /tmp/gofmt.out
+    - test -f api/openapi.yaml
+    - test -f rules/attachment_policy.json
+    - test -f tests/robot/resources/ApiLibrary.py
+
+unit-test:
+  stage: unit-test
+  image: golang:1.23
+  <<: *go_cache
+  script:
+    - go test ./...
+
+robot-test:
+  stage: robot-test
+  image: golang:1.23
+  <<: *go_cache
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq python3 python3-pip
+    - pip3 install --break-system-packages robotframework || pip3 install robotframework
+  script:
+    - bash scripts/gitlab/run-robot.sh
+  artifacts:
+    when: always
+    paths:
+      - robot-output/
+    expire_in: 1 week
+
+package:windows:
+  stage: package
+  tags:
+    - windows
+  script:
+    - powershell -File scripts/gitlab/package-windows.ps1
+  artifacts:
+    paths:
+      - dist/windows/
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
+
+package:macos:
+  stage: package
+  tags:
+    - macos
+  script:
+    - bash scripts/gitlab/package-macos.sh
+  artifacts:
+    paths:
+      - dist/macos/
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
+
+publish:
+  stage: publish
+  image: alpine:3.20
+  script:
+    - apk add --no-cache bash coreutils findutils
+    - mkdir -p dist
+    - bash scripts/gitlab/publish-artifacts.sh
+  artifacts:
+    paths:
+      - dist/releases/
+    expire_in: 4 weeks
+  rules:
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true

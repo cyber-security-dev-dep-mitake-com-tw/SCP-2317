@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Go unit tests
+        run: go test ./...
+
+  robot-test:
+    runs-on: ubuntu-latest
+    needs: unit-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Robot Framework
+        run: pip install robotframework
+      - name: Robot API smoke
+        run: bash scripts/gitlab/run-robot.sh
+
+  addin-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Typecheck Outlook add-in
+        working-directory: outlook-addin
+        run: |
+          npm install
+          npm test
+
+  scaffold-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required files exist
+        run: |
+          test -f .gitlab-ci.yml
+          test -f scripts/gitlab/package-macos.sh
+          test -f scripts/gitlab/package-windows.ps1
+          test -f scripts/gitlab/run-robot.sh
+          test -f scripts/gitlab/publish-artifacts.sh
+          test -f tests/robot/resources/ApiLibrary.py
+          test -f api/openapi.yaml
+          test -f rules/attachment_policy.json

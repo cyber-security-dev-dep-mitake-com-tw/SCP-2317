@@ -1,4 +1,10 @@
 # SCP-2317 Agent Starter
+___
+
+<img width="512" height="512" alt="logo-512" src="https://github.com/user-attachments/assets/d2eb4719-5d1e-421a-9ac5-184b97c15cd4" />
+
+
+___
 
 SCP-2317 is a defensive starter monorepo for email protection on Windows and macOS, plus a safe scanning backend. It is deliberately an MVP: the scanner performs **non-executing, offline heuristic analysis** across several defense-in-depth engines and **never executes untrusted files**.
 

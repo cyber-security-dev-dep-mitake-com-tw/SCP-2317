@@ -145,6 +145,30 @@ TLS, IAM/MFA, ICES tenant API, clawback, SIEM/SOAR, EASM, RBI, PQC, WORM/
 eDiscovery, honeytokens, takedown, deepfake/cross-channel) is enumerated with a
 concrete reason in the **`docs/ref.txt` coverage matrix** section of `README.md`.
 
+## 4d. Third pass — companion application (silent service + tray UI)
+
+Chosen scope: **local-only (no M365 tenant token)**, **Julia + QML.jl** UI,
+**full working scaffold**, signed Windows build.
+
+Delivered and verified (Go side, on macOS):
+- `internal/store` — JSONL event persistence (tested: persist/reload/stats).
+- `internal/events` — optional SIEM/SOAR webhook sink (off unless `SCP2317_SIEM_URL`).
+- `internal/easm` — SPF/DMARC/MX drift monitor (pure parsers + fake-resolver tests).
+- API endpoints `GET /v1/events`, `GET /v1/stats`, `POST /v1/urlcheck`
+  (time-of-click), `GET /v1/easm` — unit + live smoke tested. Scans now record
+  events into the store and forward to the sink.
+- Silent-mode build flag (`-H=windowsgui`) and Authenticode signing added to
+  `scripts/gitlab/package-windows.ps1` (cert-gated via `SCP2317_CERT_PFX`).
+
+Code-complete scaffold, **verified only on a Windows runner with Qt/Julia**:
+- `platform/tray-julia/` — QML.jl tray app (hidden window + `SystemTrayIcon`,
+  pops out on click, closes back to tray), `build.jl` (PackageCompiler → signed
+  silent `.exe`).
+
+Capability re-classification and the honest limits (thin-client vs authority vs
+ownership) are documented in the **Companion application** section of README.md.
+ICES/clawback/honeytokens remain deferred (authority-limited, no tenant token).
+
 ## 5. Rollout order
 1. Model + policy fields (back-compatible).
 2. Refactor URL/attachment engines to categories.

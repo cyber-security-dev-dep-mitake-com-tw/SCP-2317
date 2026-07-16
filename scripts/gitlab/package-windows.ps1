@@ -7,6 +7,29 @@ function Assert-LastExitCode {
   }
 }
 
+# Authenticode-sign a file when a code-signing certificate is configured via
+# SCP2317_CERT_PFX (path to .pfx) and SCP2317_CERT_PASSWORD. When no cert is
+# present the build still succeeds but emits UNSIGNED developer artifacts.
+# An EV certificate is recommended so Windows SmartScreen does not warn users.
+function Invoke-CodeSign {
+  param([string]$Path)
+  if (-not (Test-Path $Path)) { return }
+  $pfx = $env:SCP2317_CERT_PFX
+  if (-not $pfx -or -not (Test-Path $pfx)) {
+    Write-Warning "SCP2317_CERT_PFX not set/found; leaving UNSIGNED: $Path"
+    return
+  }
+  $signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
+  if (-not $signtool) {
+    Write-Warning "signtool.exe not found (install the Windows SDK); leaving UNSIGNED: $Path"
+    return
+  }
+  & $signtool.Source sign /fd SHA256 /f $pfx /p $env:SCP2317_CERT_PASSWORD `
+    /tr http://timestamp.digicert.com /td SHA256 $Path
+  Assert-LastExitCode -Step "signtool sign $Path"
+  Write-Host "Signed $Path"
+}
+
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $OutDir = Join-Path $RootDir 'dist\windows'
 $PayloadDir = Join-Path $OutDir 'payload\SCP-2317'
@@ -30,7 +53,8 @@ try {
   $env:GOOS = 'windows'
   $env:GOARCH = 'amd64'
   $env:CGO_ENABLED = '0'
-  go build -ldflags='-s -w' -o $ApiBinary ./cmd/api
+  # -H=windowsgui makes the background service run silently (no console window).
+  go build -ldflags='-s -w -H=windowsgui' -o $ApiBinary ./cmd/api
   Assert-LastExitCode -Step 'go build'
 
   cargo build --manifest-path (Join-Path $RootDir 'platform\windows-addin\Cargo.toml') --target $AddinTarget --release
@@ -43,6 +67,28 @@ try {
     throw "cargo build reported success but $AddinBuildDll was not created."
   }
   Copy-Item -Force $AddinBuildDll $AddinPayloadDll
+
+  # Optional: build the Julia/QML tray companion into the payload. Skipped when
+  # Julia is unavailable on the runner (the core installer does not require it).
+  $julia = Get-Command julia -ErrorAction SilentlyContinue
+  $TrayExeSrc = Join-Path $RootDir 'dist\tray-julia\bin\scp2317-tray.exe'
+  if ($julia) {
+    & $julia.Source --project=(Join-Path $RootDir 'platform\tray-julia') (Join-Path $RootDir 'platform\tray-julia\build.jl')
+    if (($LASTEXITCODE -eq 0) -and (Test-Path $TrayExeSrc)) {
+      Copy-Item -Recurse -Force (Join-Path $RootDir 'dist\tray-julia\*') $PayloadDir
+      Invoke-CodeSign -Path (Join-Path $PayloadDir 'bin\scp2317-tray.exe')
+    } else {
+      Write-Warning 'Julia tray build did not produce an executable; packaging service without tray UI.'
+    }
+  } else {
+    Write-Warning 'julia not found on runner; packaging service without the tray UI.'
+  }
+
+  # Sign the service binary and the COM add-in before they are wrapped by the
+  # installers (which are then signed too).
+  Invoke-CodeSign -Path $ApiBinary
+  Invoke-CodeSign -Path $AddinPayloadDll
+
   if (-not (Test-Path $LogoIco)) {
     throw 'assets/logo.ico is missing; generate branding assets before packaging.'
   }
@@ -101,6 +147,10 @@ try {
   if (-not (Test-Path $MsiOut)) {
     throw "wix build reported success but $MsiOut was not created."
   }
+
+  # Sign the finished installers.
+  Invoke-CodeSign -Path $ExeOut
+  Invoke-CodeSign -Path $MsiOut
 
   Write-Host "Wrote $ExeOut and $MsiOut"
 }

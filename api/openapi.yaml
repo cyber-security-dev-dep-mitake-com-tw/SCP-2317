@@ -96,6 +96,51 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SandboxReportResponse"
+  /v1/events:
+    get:
+      summary: Recent companion-app events (tray UI)
+      parameters:
+        - name: n
+          in: query
+          schema: { type: integer }
+      responses:
+        "200": { description: Event list }
+  /v1/stats:
+    get:
+      summary: Aggregated verdict/kind counts
+      responses:
+        "200": { description: Stats }
+  /v1/urlcheck:
+    post:
+      summary: Time-of-click single-URL re-scan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string }
+      responses:
+        "200":
+          description: Verdict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Verdict"
+        "400": { description: Missing url }
+  /v1/easm:
+    get:
+      summary: EASM SPF/DMARC/MX drift check for an owned domain
+      parameters:
+        - name: domain
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: EASM result }
+        "400": { description: Missing domain }
 components:
   schemas:
     Artifact:
@@ -150,7 +195,7 @@ components:
           type: array
           items:
             type: string
-          description: Ordered Received: header lines for route forensics.
+          description: "Ordered Received: header lines for route forensics."
         attachments:
           type: array
           items:

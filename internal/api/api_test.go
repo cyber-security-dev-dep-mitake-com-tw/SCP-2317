@@ -114,3 +114,55 @@ func TestSandboxSubmitStatusReport(t *testing.T) {
 		t.Fatalf("%+v", rep)
 	}
 }
+
+func TestCompanionEndpoints(t *testing.T) {
+	h := New(nil)
+	srv := h.Routes()
+
+	// A scan should record an event visible via /v1/events and /v1/stats.
+	body, _ := json.Marshal(model.EmailScanRequest{MessageID: "e1", URLs: []string{"http://xn--demo.test"}})
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/email/scan", bytes.NewReader(body)))
+	if rr.Code != 200 {
+		t.Fatalf("scan code=%d", rr.Code)
+	}
+
+	rrE := httptest.NewRecorder()
+	srv.ServeHTTP(rrE, httptest.NewRequest(http.MethodGet, "/v1/events?n=10", nil))
+	if rrE.Code != 200 {
+		t.Fatalf("events code=%d", rrE.Code)
+	}
+	var evs []map[string]any
+	if err := json.Unmarshal(rrE.Body.Bytes(), &evs); err != nil || len(evs) == 0 {
+		t.Fatalf("events body=%s", rrE.Body.String())
+	}
+
+	rrS := httptest.NewRecorder()
+	srv.ServeHTTP(rrS, httptest.NewRequest(http.MethodGet, "/v1/stats", nil))
+	if rrS.Code != 200 || !bytes.Contains(rrS.Body.Bytes(), []byte(`"total"`)) {
+		t.Fatalf("stats body=%s", rrS.Body.String())
+	}
+}
+
+func TestURLCheckEndpoint(t *testing.T) {
+	srv := New(nil).Routes()
+	body, _ := json.Marshal(map[string]string{"url": "http://xn--demo.test/login"})
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/urlcheck", bytes.NewReader(body)))
+	if rr.Code != 200 {
+		t.Fatalf("urlcheck code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var v model.Verdict
+	if err := json.Unmarshal(rr.Body.Bytes(), &v); err != nil || v.Status == "clean" {
+		t.Fatalf("expected non-clean verdict: %s", rr.Body.String())
+	}
+}
+
+func TestURLCheckRequiresURL(t *testing.T) {
+	srv := New(nil).Routes()
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/v1/urlcheck", bytes.NewBufferString("{}")))
+	if rr.Code != 400 {
+		t.Fatalf("code=%d", rr.Code)
+	}
+}

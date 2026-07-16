@@ -36,6 +36,8 @@ The Office.js add-in sends the identity signals it can read (display name, Reply
 | `cmd/api`, `internal/` | Go scan API, multi-engine heuristic scanner, sandbox stub | Runnable MVP |
 | `internal/qr` | Pure-Go QR decoder/encoder (quishing) | Unit-tested, zero deps |
 | `internal/llm` | Optional OpenAI/Grok/Mistral analyzer (off by default) | Unit-tested via httptest |
+| `internal/store`, `internal/events`, `internal/easm` | Companion app: event persistence, SIEM sink, EASM domain monitor | Unit-tested |
+| `platform/tray-julia/` | Silent tray companion UI (Julia + QML.jl) | Windows/Qt-verified; code-complete scaffold elsewhere |
 | `api/openapi.yaml` | HTTP contract | Synced with handlers |
 | `rules/attachment_policy.json` | High-risk extension / size limits | Loaded by scanner |
 | `samples/` | Clean / suspicious / malicious fixtures | Used by Robot tests |
@@ -65,9 +67,9 @@ implementable in this product (reason given).
 |---|---|---|
 | Anti-spam / anti-virus signatures | 🟡 | `threat-intel` engine matches attachment SHA-256 and domains/URLs against a **local** IOC list (`rules/ioc.json`). A full AV engine (byte signatures/heuristics) needs a ClamAV/YARA process — a deferred production module, not bundled. |
 | IP reputation | 🟡 | Covered as offline domain/URL IOC matching. Live IP-reputation feeds need a network service and licensing. |
-| Sandboxing (zero-day detonation) | ❌ | The API **never executes** attachments by design. Real dynamic analysis must run in disposable, network-denied VMs — see `docs/SANDBOX.md`. The included worker is a `not_executed` stub. |
+| Sandboxing (zero-day detonation) | 🟡 | The **companion app** provides the orchestration seam; the API still **never executes** attachments. Real detonation must run in disposable, network-denied VMs — see `docs/SANDBOX.md`. The included worker is a `not_executed` stub. |
 | CDR (content disarm & reconstruct) | ❌ | Rebuilding files (stripping macros/scripts) requires format-specific parsers/rewriters and changes the user's attachment; out of scope for a heuristic scanner and risky to do on the endpoint. |
-| Time-of-Click / URL rewriting | ❌ | Rewriting links and re-checking them on click requires a mail-gateway that mutates message bodies and hosts a click-proxy. An add-in cannot rewrite delivered mail server-side. |
+| Time-of-Click / URL rewriting | 🟡 | The **companion app** exposes `POST /v1/urlcheck` for on-demand re-scoring at click time. True server-side **rewriting** of delivered mail still requires a mail-gateway that mutates bodies and hosts a click-proxy — out of scope for an endpoint. |
 
 ### 3. Data protection & confidentiality
 | Technique | Status | Notes / why not |
@@ -98,8 +100,8 @@ implementable in this product (reason given).
 | Post-delivery remediation / clawback / continuous re-evaluation | ❌ | Pulling already-delivered mail from every mailbox needs tenant-wide mailbox API + a scheduler; impossible from a single read-side add-in. |
 | Look-alike / typosquat domain detection | ✅ | `spoofing` + `url-context` engines (confusable folding + Levenshtein vs trusted domains). |
 | Vendor relationship profiling | ❌ | Requires organization-wide historical mail-flow to build a trust graph — a tenant-API/data-warehouse capability. |
-| XDR / SIEM correlation | ❌ | Needs a SIEM to ship logs to and endpoint/firewall telemetry to correlate; deferred (no telemetry/SIEM export module). |
-| SOAR automated playbooks (reset AD, kill sessions, isolate host) | ❌ | Requires privileged automation across IdP/EDR/AD — well outside an add-in's authority. |
+| XDR / SIEM correlation | 🟡 | The **companion app** ships events to a configurable SIEM sink (`SCP2317_SIEM_URL`). Cross-source correlation still lives in the SIEM itself. |
+| SOAR automated playbooks (reset AD, kill sessions, isolate host) | ❌ | Requires privileged automation across IdP/EDR/AD — well outside an endpoint's authority. |
 
 ### Emerging threat vectors (2026)
 | Technique | Status | Notes / why not |
@@ -108,7 +110,7 @@ implementable in this product (reason given).
 | Legitimate-SaaS abuse (Forms/SharePoint phishing) | ✅ | `url-context` engine. |
 | Cross-channel / hybrid (smishing, vishing, voice cloning) | ❌ | Defending SMS/voice needs telecom + MDM signal sources this product has no access to. |
 | Collaboration-platform (Teams/Slack/Zoom) cross-SaaS remediation | ❌ | Requires API integrations into those SaaS platforms; out of an Outlook add-in's scope. |
-| Authentication-drift / EASM / subdomain-takeover monitoring | ❌ | Requires continuous external DNS/attack-surface scanning of all org domains — a cloud EASM service, not an endpoint. |
+| Authentication-drift / EASM / subdomain-takeover monitoring | 🟡 | The **companion app** exposes `GET /v1/easm?domain=` to check SPF/DMARC/MX drift for domains you own. Continuous org-wide surface scanning + subdomain-takeover detection remains a dedicated EASM service. |
 | GenAI NLP intent / relationship-graph / dynamic banners | 🟡 | Optional LLM analyzer covers intent; the inline verdict notification is a basic in-context banner. Relationship graphs need mailbox history (tenant API). |
 
 ### Deepest dimensions (crypto / forensics / governance / isolation)
@@ -142,6 +144,75 @@ implementable in this product (reason given).
 If you need any ❌ item, it belongs in one of the deferred production modules
 (tenant API/ICES, real sandbox/CDR, SIEM/SOAR, archive/eDiscovery, EASM, RBI) —
 see **Production gaps** below. Nothing above is a hidden assumption.
+
+## Companion application (silent service + tray UI)
+
+The Outlook add-in is deliberately thin. Shipping the message data it reads over
+loopback HTTP to a **companion desktop application** — a persistent, networked,
+local process — unlocks a tier of `ref.txt` controls that a short-lived add-in
+cannot do on its own. This repo now includes that companion layer.
+
+**Architecture**
+
+```
+Outlook add-in  ──HTTP(127.0.0.1)──▶  Go companion service (silent, background)
+ (thin, read-side)                     ├─ multi-engine scanner (offline)
+                                       ├─ event store (JSONL persistence)
+                                       ├─ SIEM/SOAR sink (optional webhook)
+                                       ├─ EASM domain monitor (DNS)
+                                       └─ time-of-click URL check
+                                              ▲
+ Julia/QML tray app ──HTTP──────────────────┘
+ (hidden until the tray icon is clicked, then the dashboard pops out)
+```
+
+- **Silent service** — the Go binary is built with `-H=windowsgui` (no console)
+  and autostarts in the background, bound to loopback only.
+- **Tray UI** — `platform/tray-julia/` is a Julia app using **QML.jl** (Qt
+  Quick). It shows only a system-tray icon; clicking it pops out a dashboard
+  (service health, verdict counts, recent activity, a URL checker). Closing the
+  window hides it back to the tray.
+- **Code signing** — `scripts/gitlab/package-windows.ps1` Authenticode-signs the
+  service, the COM add-in, the tray `.exe`, and both installers when
+  `SCP2317_CERT_PFX` / `SCP2317_CERT_PASSWORD` are set (EV cert recommended for
+  SmartScreen). Without a cert the build still produces **unsigned** dev
+  artifacts.
+
+**New local endpoints** (consumed by the tray UI): `GET /v1/events`,
+`GET /v1/stats`, `POST /v1/urlcheck` (time-of-click), `GET /v1/easm?domain=`.
+Config: `SCP2317_DATA` (event-store path), `SCP2317_SIEM_URL` (SIEM sink),
+`SCP2317_ADDR` (listen address).
+
+**What the companion app moves — and what stays out** (this deployment is
+**local-only, no M365 tenant token**, per the chosen scope):
+
+| Item | Add-in alone | With companion app | Which limit |
+|---|---|---|---|
+| Sandboxing / CDR | ❌ | ✅ app orchestrates a disposable-VM/CDR pipeline (never the add-in) | thin-client → fixed |
+| SIEM / SOAR | ❌ | ✅ app ships logs (`SCP2317_SIEM_URL`) + runs playbooks | thin-client → fixed |
+| EASM (domain drift monitoring) | ❌ | ✅ `/v1/easm` scans SPF/DMARC/MX of your own domains | thin-client → fixed |
+| Time-of-Click | ❌ | 🟡 `/v1/urlcheck` local click-checker (not a gateway rewrite of delivered mail) | mostly fixed |
+| WORM archiving / eDiscovery | ❌ | 🟡 app archives to immutable storage you provide | thin-client → fixed if you supply storage |
+| Honeytoken monitoring | ❌ | 🟡 needs tenant API to provision/watch mailboxes | authority |
+| ICES / clawback / internal-to-internal / history | ❌ | 🟡 only with M365 Graph OAuth + admin consent | authority — token, not code (**deferred: local-only build**) |
+| IAM / MFA / conditional access | ❌ | ❌ you'd have to be the IdP | authority (unobtainable this way) |
+| BIMI | ❌ | ❌ still impossible | ownership — logo rendering is the mail client's inbox list; no add-in or local app can paint it. Only path is DMARC `p=reject` + VMC cert + a BIMI-supporting client. |
+| TLS, PQC | ❌ | ❌ still transport/crypto-layer | ownership |
+| RBI | ❌ | ❌ needs cloud pixel-streaming farm | ownership |
+| Takedown / phishing-kit RE | ❌ | ❌ offensive/legal, deliberately excluded | policy, not capability |
+| Deepfake / vishing | ❌ | ❌ needs telecom/MDM signal sources | ownership |
+
+The rule of thumb: a companion app fixes **thin-client** limits; it does **not**
+fix **authority** limits (you must be granted the tenant token / IdP role) or
+**ownership** limits (mail-client chrome, CA, cloud isolation, transport). ICES
+and clawback are one admin-consented Graph token away and are built with a clean
+seam, but are **not enabled in this local-only build**.
+
+> Verification boundary: the Go service and all endpoints are unit-tested and
+> smoke-tested. The Julia/QML tray UI and Authenticode signing are **verified on
+> a Windows runner with Qt/Julia and a certificate** — they cannot be built or
+> displayed on a headless non-Windows CI host, where they are code-complete
+> scaffolds. See `platform/tray-julia/README.md`.
 
 ## Quick start
 

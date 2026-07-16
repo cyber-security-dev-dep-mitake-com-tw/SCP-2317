@@ -171,11 +171,14 @@ func (p *Pipeline) Scan(r model.EmailScanRequest) model.Verdict {
 
 	// Inbound-facing engines.
 	findings = append(findings, p.urlEngine(urls)...)
+	findings = append(findings, p.urlContextEngine(r, urls)...)
 	findings = append(findings, p.attachmentEngine(r)...)
 	findings = append(findings, p.authEngine(r)...)
 	findings = append(findings, p.spoofingEngine(r)...)
 	findings = append(findings, p.socialEngine(r)...)
 	findings = append(findings, p.quishingEngine(r)...)
+	findings = append(findings, p.routeForensicsEngine(r)...)
+	findings = append(findings, p.iocEngine(r, urls)...)
 
 	// Outbound-only engine (data loss prevention).
 	if strings.EqualFold(r.Direction, "outbound") {
@@ -247,6 +250,10 @@ func (p *Pipeline) urlEngine(urls []string) []model.Finding {
 	return out
 }
 
+// docExtensions are benign-looking extensions attackers place before a real,
+// dangerous one (invoice.pdf.exe) or use to disguise a payload (report.pdf.png).
+var docExtensions = []string{".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".jpg", ".png", ".zip"}
+
 func (p *Pipeline) attachmentEngine(r model.EmailScanRequest) []model.Finding {
 	var out []model.Finding
 	for _, a := range r.Attachments {
@@ -259,6 +266,19 @@ func (p *Pipeline) attachmentEngine(r model.EmailScanRequest) []model.Finding {
 					Severity: "high",
 					Summary:  "High-risk attachment type: " + ext,
 				})
+			}
+		}
+		// Double-extension masquerade: a document/image extension appears in the
+		// middle of the name, hinting the true type is hidden (e.g. .pdf.png).
+		for _, de := range docExtensions {
+			if idx := strings.Index(name, de+"."); idx >= 0 && idx+len(de)+1 < len(name) {
+				out = append(out, model.Finding{
+					Engine:   "attachment-name",
+					Category: "attachment",
+					Severity: "medium",
+					Summary:  "Attachment uses a double extension (possible masquerade): " + a.Name,
+				})
+				break
 			}
 		}
 		if a.DataBase64 != "" {

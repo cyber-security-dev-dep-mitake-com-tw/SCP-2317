@@ -32,6 +32,18 @@ var intentLexicon = map[string][]string{
 		"reset your password", "log in to", "scan the qr", "download the image",
 		"驗證您的帳戶", "確認身分", "點擊這裡", "重設密碼", "掃描 qr", "這裡下載圖片", "登入以",
 	},
+	// Reciprocity / greed lures (ref.txt §5 psychological vectors).
+	"reward": {
+		"unclaimed refund", "tax refund", "you have won", "gift voucher",
+		"performance bonus", "reward points", "claim your prize",
+		"未申領", "退稅", "中獎", "禮券", "績效獎金", "領取獎品",
+	},
+	// Sympathy / help-request lures (gift-card / stranded-colleague scams).
+	"sympathy": {
+		"i need your help", "are you available", "quick favor", "buy gift card",
+		"stuck in a meeting", "wallet lost", "reimburse you later",
+		"需要你的幫忙", "方便嗎", "幫個忙", "買禮品卡", "開會中", "錢包遺失", "事後報帳",
+	},
 }
 
 // socialEngine scores social-engineering / BEC intent from subject + body.

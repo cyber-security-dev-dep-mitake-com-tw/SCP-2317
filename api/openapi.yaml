@@ -146,6 +146,11 @@ components:
           items:
             type: string
           description: URLs a client decoded from QR images (quishing).
+        received:
+          type: array
+          items:
+            type: string
+          description: Ordered Received: header lines for route forensics.
         attachments:
           type: array
           items:

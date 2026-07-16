@@ -31,9 +31,12 @@ function getBodyPreview(item: Office.MessageRead): Promise<string> {
   });
 }
 
-/** Reads the Authentication-Results header so the API can surface SPF/DKIM/DMARC
- *  outcomes. Resolves to "" when the host/API set does not expose headers. */
-function getAuthResults(item: Office.MessageRead): Promise<string> {
+type MessageHeaders = { authResults: string; received: string[] };
+
+/** Reads the Authentication-Results and Received headers so the API can surface
+ *  SPF/DKIM/DMARC outcomes and do route forensics. Resolves to empties when the
+ *  host/API set does not expose internet headers. */
+function getMessageHeaders(item: Office.MessageRead): Promise<MessageHeaders> {
   return new Promise((resolve) => {
     const anyItem = item as unknown as {
       getAllInternetHeadersAsync?: (
@@ -41,18 +44,25 @@ function getAuthResults(item: Office.MessageRead): Promise<string> {
       ) => void;
     };
     if (typeof anyItem.getAllInternetHeadersAsync !== "function") {
-      resolve("");
+      resolve({ authResults: "", received: [] });
       return;
     }
     anyItem.getAllInternetHeadersAsync((result) => {
       if (result.status !== Office.AsyncResultStatus.Succeeded) {
-        resolve("");
+        resolve({ authResults: "", received: [] });
         return;
       }
-      const line = (result.value || "")
-        .split(/\r?\n/)
-        .find((l) => /^authentication-results:/i.test(l));
-      resolve(line ? line.replace(/^authentication-results:\s*/i, "") : "");
+      const lines = (result.value || "").split(/\r?\n/);
+      const authLine = lines.find((l) => /^authentication-results:/i.test(l));
+      const received = lines
+        .filter((l) => /^received:/i.test(l))
+        .map((l) => l.replace(/^received:\s*/i, ""));
+      resolve({
+        authResults: authLine
+          ? authLine.replace(/^authentication-results:\s*/i, "")
+          : "",
+        received,
+      });
     });
   });
 }
@@ -75,7 +85,7 @@ async function buildScanRequest(item: Office.MessageRead) {
   }).replyTo;
   const replyTo =
     (replyToList && replyToList[0] && replyToList[0].emailAddress) || "";
-  const authResults = await getAuthResults(item);
+  const headers = await getMessageHeaders(item);
   const urls = extractUrls(body);
   const attachments = (item.attachments || []).map((a) => ({
     name: a.name,
@@ -86,7 +96,8 @@ async function buildScanRequest(item: Office.MessageRead) {
     sender,
     sender_display: senderDisplay,
     reply_to: replyTo,
-    auth_results: authResults,
+    auth_results: headers.authResults,
+    received: headers.received,
     direction: "inbound",
     subject,
     body_preview: body,

@@ -123,6 +123,28 @@ pure-Go QR decode of inline images), outbound DLP, plus the optional LLM
 analyzer (OpenAI/Grok/Mistral, off by default). Clients (Office.js + Rust) send
 the new signals; Office.js `OnMessageSend` blocks sends on a DLP hit.
 
+## 4c. Second pass — full `ref.txt` coverage
+
+A second, exhaustive read of `docs/ref.txt` drove these additional offline
+engines (all unit-tested, no new dependencies, no network):
+
+- **threat-intel / IOC** (`ioc.go`, `rules/ioc.json`) — offline signature/
+  reputation matching (attachment SHA-256, sender/URL domains, phishing-kit URL
+  substrings). Stands in for AV signatures, IP reputation, and STIX/TAXII feeds.
+- **url-context** (`url_context.go`) — legitimate-SaaS-abuse detection and
+  in-body look-alike/typosquat links.
+- **route-forensics** (`url_context.go`) — Received-chain length and bare-IP
+  relay flags.
+- **attachment double-extension masquerade** (`pipeline.go`).
+- **expanded social lexicon** — reciprocity/reward and sympathy/gift-card
+  vectors, EN + 繁中.
+
+Everything in `ref.txt` that this endpoint architecture **cannot** implement
+(BIMI, DMARC enforcement, real sandbox/CDR, Time-of-Click rewriting, S/MIME/PGP,
+TLS, IAM/MFA, ICES tenant API, clawback, SIEM/SOAR, EASM, RBI, PQC, WORM/
+eDiscovery, honeytokens, takedown, deepfake/cross-channel) is enumerated with a
+concrete reason in the **`docs/ref.txt` coverage matrix** section of `README.md`.
+
 ## 5. Rollout order
 1. Model + policy fields (back-compatible).
 2. Refactor URL/attachment engines to categories.

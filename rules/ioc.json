@@ -1,0 +1,13 @@
+{
+  "bad_sha256": [
+    "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
+  ],
+  "bad_domains": [
+    "known-c2-drop.invalid",
+    "phishing-kit-host.invalid"
+  ],
+  "bad_url_substrings": [
+    "/wp-includes/verify-account",
+    "login-confirm-identity"
+  ]
+}

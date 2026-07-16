@@ -27,6 +27,9 @@ type EmailScanRequest struct {
 	// QRURLs are URLs a client decoded from QR images when the server cannot
 	// decode the image itself (e.g. QR embedded in a PDF the client rasterized).
 	QRURLs []string `json:"qr_urls,omitempty"`
+	// ReceivedChain is the ordered list of Received: header lines (top = most
+	// recent hop) the client read from the message, for route forensics.
+	ReceivedChain []string `json:"received,omitempty"`
 }
 
 type Finding struct {

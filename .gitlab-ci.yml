@@ -32,6 +32,15 @@ unit-test:
   script:
     - go test ./...
 
+addin-test:
+  stage: unit-test
+  image: node:20
+  script:
+    - cd outlook-addin
+    - npm install
+    - npm test
+    - npx --yes office-addin-manifest validate manifest.xml
+
 robot-test:
   stage: robot-test
   image: golang:1.23

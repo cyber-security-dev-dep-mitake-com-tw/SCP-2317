@@ -44,6 +44,9 @@ jobs:
         run: |
           npm install
           npm test
+      - name: Validate Outlook add-in manifest
+        working-directory: outlook-addin
+        run: npx --yes office-addin-manifest validate manifest.xml
 
   scaffold-check:
     runs-on: ubuntu-latest

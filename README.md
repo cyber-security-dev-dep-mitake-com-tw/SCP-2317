@@ -246,7 +246,22 @@ Triggers: push to `main`/`master`, version tags (`v*`), or **Run workflow** (man
 | `macos-14` (Apple Silicon) | `SCP-2317.pkg`, `SCP-2317.dmg` |
 | `macos-13` (Intel) | `SCP-2317.pkg`, `SCP-2317.dmg` |
 
-Artifacts are unsigned developer builds. Installers embed the SCP-2317 logo from `assets/logo.*` (see `assets/ATTRIBUTION.md`).
+### Code signing in CI
+
+The Windows job signs the service, COM add-in, tray exe, and both installers
+when two repository secrets are present (otherwise it builds **unsigned** dev
+artifacts and skips the signature-verify step):
+
+| Secret | Value |
+|---|---|
+| `SCP2317_CERT_PFX_BASE64` | Your Authenticode `.pfx`, base64-encoded (`base64 -w0 cert.pfx` / `certutil -encode`). An **EV** cert is recommended for SmartScreen. |
+| `SCP2317_CERT_PASSWORD` | The `.pfx` password. |
+
+The workflow decodes the cert to `RUNNER_TEMP`, exports `SCP2317_CERT_PFX`,
+locates `signtool.exe` from the Windows SDK, runs `scripts/gitlab/package-windows.ps1`
+(which calls `signtool sign /fd SHA256 /tr <timestamp> /td SHA256`), then
+verifies each installer with `Get-AuthenticodeSignature`. Without the secrets,
+artifacts are unsigned developer builds. Installers embed the SCP-2317 logo from `assets/logo.*` (see `assets/ATTRIBUTION.md`).
 On Windows, the installer also installs and registers the native classic Outlook COM add-in with `regsvr32`, so classic Outlook loads the embedded Ribbon UI on startup without a `manifest.xml` sideload step.
 
 Local packaging:

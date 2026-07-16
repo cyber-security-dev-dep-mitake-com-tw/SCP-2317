@@ -16,6 +16,8 @@ jobs:
   package-windows:
     name: Windows 10/11 installers (.exe / .msi)
     runs-on: windows-latest
+    env:
+      HAS_CERT: ${{ secrets.SCP2317_CERT_PFX_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,9 +38,52 @@ jobs:
           dotnet tool install --global wix --version 4.0.5
           wix --version
 
+      # Stage the Authenticode certificate from repository secrets. Store the
+      # .pfx as base64 in secret SCP2317_CERT_PFX_BASE64 and its password in
+      # SCP2317_CERT_PASSWORD. When unset, the build proceeds UNSIGNED.
+      - name: Prepare code-signing certificate
+        shell: pwsh
+        env:
+          CERT_BASE64: ${{ secrets.SCP2317_CERT_PFX_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
+            Write-Host "No SCP2317_CERT_PFX_BASE64 secret set; artifacts will be UNSIGNED."
+          } else {
+            $pfx = Join-Path $env:RUNNER_TEMP 'scp2317-codesign.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT_BASE64))
+            "SCP2317_CERT_PFX=$pfx" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            Write-Host "Certificate staged for signing."
+          }
+
+      # signtool.exe ships with the Windows SDK but is not on PATH by default.
+      - name: Locate signtool
+        shell: pwsh
+        run: |
+          $st = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if ($st) {
+            Split-Path $st.FullName | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+            Write-Host "signtool: $($st.FullName)"
+          } else {
+            Write-Warning "signtool.exe not found; signing steps will be skipped."
+          }
+
       - name: Build Windows packages
         shell: pwsh
+        env:
+          SCP2317_CERT_PASSWORD: ${{ secrets.SCP2317_CERT_PASSWORD }}
         run: .\scripts\gitlab\package-windows.ps1
+
+      - name: Verify signatures
+        if: ${{ env.HAS_CERT == 'true' }}
+        shell: pwsh
+        run: |
+          $targets = @('dist/windows/SCP-2317-Setup.exe', 'dist/windows/SCP-2317.msi')
+          foreach ($t in $targets) {
+            $sig = Get-AuthenticodeSignature $t
+            Write-Host "$t -> $($sig.Status)"
+            if ($sig.Status -ne 'Valid') { throw "Signature check failed for $t ($($sig.Status))" }
+          }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4

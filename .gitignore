@@ -9,3 +9,7 @@ platform/macos-es/.build/
 __pycache__/
 tests/robot/resources/__pycache__/
 /outlook-addin/node_modules
+scripts/gitlab/run-robot.sh
+scripts/gitlab/publish-artifacts.sh
+scripts/gitlab/package-windows.ps1
+scripts/gitlab/package-macos.sh

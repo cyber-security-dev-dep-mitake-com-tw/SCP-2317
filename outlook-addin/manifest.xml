@@ -8,7 +8,11 @@
   <Description DefaultValue="Scans the selected email with an authorized SCP-2317 service."/>
   <IconUrl DefaultValue="https://localhost:3000/icon-64.png"/>
   <SupportUrl DefaultValue="https://localhost:3000/support.html"/>
-  <AppDomains><AppDomain>https://localhost:8080</AppDomain></AppDomains>
+  <AppDomains>
+    <AppDomain>https://localhost:3000</AppDomain>
+    <AppDomain>http://127.0.0.1:8080</AppDomain>
+    <AppDomain>http://localhost:8080</AppDomain>
+  </AppDomains>
   <Hosts><Host Name="Mailbox"/></Hosts>
   <Requirements><Sets><Set Name="Mailbox" MinVersion="1.8"/></Sets></Requirements>
   <FormSettings>

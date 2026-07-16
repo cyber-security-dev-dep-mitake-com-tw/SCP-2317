@@ -1,0 +1,9 @@
+# Lets `cargo build --target x86_64-pc-windows-gnu` link on a macOS/Linux
+# dev machine via mingw-w64, so this crate's *actual* linking (not just
+# `cargo check`'s type/borrow-checking) can be validated without a Windows
+# box. Production builds still target `x86_64-pc-windows-msvc` (see
+# `scripts/gitlab/package-windows.ps1`); this is a development-only
+# convenience and intentionally lives next to the crate, not at repo root.
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-gcc-ar"

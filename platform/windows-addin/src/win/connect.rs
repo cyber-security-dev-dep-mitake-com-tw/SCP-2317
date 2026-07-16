@@ -236,8 +236,10 @@ impl IDTExtensibility2_Impl for Connect_Impl {
 
 impl IRibbonExtensibility_Impl for Connect_Impl {
     unsafe fn GetCustomUI(&self, _ribbon_id: Ref<BSTR>, out: OutRef<BSTR>) -> HRESULT {
-        out.write(BSTR::from(ribbon_xml()));
-        S_OK
+        match out.write(BSTR::from(ribbon_xml())) {
+            Ok(()) => S_OK,
+            Err(e) => e.code(),
+        }
     }
 }
 

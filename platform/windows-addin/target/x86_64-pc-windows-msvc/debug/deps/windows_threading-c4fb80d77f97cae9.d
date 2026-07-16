@@ -1,0 +1,8 @@
+/Users/dennis_leedennis_lee/Documents/GitHub/kaspersky/SCP-2317/platform/windows-addin/target/x86_64-pc-windows-msvc/debug/deps/windows_threading-c4fb80d77f97cae9.d: /Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/lib.rs /Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/bindings.rs /Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/pool.rs /Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/../readme.md
+
+/Users/dennis_leedennis_lee/Documents/GitHub/kaspersky/SCP-2317/platform/windows-addin/target/x86_64-pc-windows-msvc/debug/deps/libwindows_threading-c4fb80d77f97cae9.rmeta: /Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/lib.rs /Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/bindings.rs /Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/pool.rs /Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/../readme.md
+
+/Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/lib.rs:
+/Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/bindings.rs:
+/Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/pool.rs:
+/Users/dennis_leedennis_lee/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/windows-threading-0.2.1/src/../readme.md:

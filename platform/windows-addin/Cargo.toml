@@ -1,0 +1,44 @@
+[package]
+name = "scp2317-outlook-comaddin"
+version = "0.1.0"
+edition = "2021"
+description = "Native classic-Outlook COM Add-in (IDTExtensibility2 + Ribbon) for SCP-2317. No sideload required; registers itself via the Windows installer."
+license = "MIT"
+
+# Outlook loads this as a classic in-process COM server (regsvr32-style
+# registration), so it must build as a cdylib. `rlib` is also produced so the
+# portable, non-COM modules (scan_client / ribbon_xml) can be unit tested with
+# a normal `cargo test` on any host OS.
+[lib]
+name = "scp2317_outlook_comaddin"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# No TLS backend: the API is only ever called over http://127.0.0.1, so we
+# avoid pulling in a TLS stack (and its C build dependencies) entirely.
+ureq = { version = "2", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+# windows-implement/windows-interface generate code that refers to the
+# `windows_core` crate name directly, so it must be a real dependency even
+# though we otherwise only use it via the `windows::core` re-export.
+windows-core = "0.62"
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Globalization",
+  "Win32_Security",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Ole",
+  "Win32_System_Variant",
+  "Win32_System_Registry",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+# Used only by the portable scan_client unit tests to fake the Go API over
+# a real loopback socket, so we avoid a real HTTP mocking dependency.

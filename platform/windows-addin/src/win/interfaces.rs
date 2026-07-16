@@ -17,6 +17,10 @@ use windows::core::{interface, OutRef, Ref, BSTR, HRESULT};
 use windows::Win32::System::Com::{IDispatch, IDispatch_Impl, IDispatch_Vtbl, SAFEARRAY};
 use core::ffi::c_void;
 
+// COM method names are PascalCase by convention (they mirror the exact
+// names Office/VBA/C++ callers use); fighting that with snake_case would
+// only make cross-referencing Microsoft's own docs harder.
+#[allow(non_snake_case)]
 #[interface("B65AD801-ABAF-11D0-BB8B-00A0C90F2744")]
 pub unsafe trait IDTExtensibility2: IDispatch {
     unsafe fn OnConnection(
@@ -32,6 +36,7 @@ pub unsafe trait IDTExtensibility2: IDispatch {
     unsafe fn OnBeginShutdown(&self, custom: *const SAFEARRAY) -> HRESULT;
 }
 
+#[allow(non_snake_case)]
 #[interface("000C0396-0000-0000-C000-000000000046")]
 pub unsafe trait IRibbonExtensibility: IDispatch {
     unsafe fn GetCustomUI(&self, ribbon_id: Ref<BSTR>, out: OutRef<BSTR>) -> HRESULT;

@@ -14,10 +14,24 @@ type EmailScanRequest struct {
 	BodyPreview string     `json:"body_preview,omitempty"`
 	URLs        []string   `json:"urls,omitempty"`
 	Attachments []Artifact `json:"attachments,omitempty"`
+
+	// SenderDisplay is the From header display name (e.g. "資安研發部-李沛宸").
+	SenderDisplay string `json:"sender_display,omitempty"`
+	// ReplyTo is the Reply-To address, if it differs from Sender.
+	ReplyTo string `json:"reply_to,omitempty"`
+	// AuthResults is the raw Authentication-Results header the client read from
+	// the message (SPF/DKIM/DMARC). The API surfaces it; it does not perform DNS.
+	AuthResults string `json:"auth_results,omitempty"`
+	// Direction is "inbound" (default) or "outbound". Outbound enables DLP.
+	Direction string `json:"direction,omitempty"`
+	// QRURLs are URLs a client decoded from QR images when the server cannot
+	// decode the image itself (e.g. QR embedded in a PDF the client rasterized).
+	QRURLs []string `json:"qr_urls,omitempty"`
 }
 
 type Finding struct {
 	Engine   string `json:"engine"`
+	Category string `json:"category,omitempty"`
 	Severity string `json:"severity"`
 	Summary  string `json:"summary"`
 }

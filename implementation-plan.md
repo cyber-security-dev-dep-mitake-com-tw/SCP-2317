@@ -33,6 +33,18 @@ URLs and high-risk attachment *extensions*. It is blind to:
 | Anti-spam / AV signatures, sandboxing, CDR | **No (already stubbed)** | Sandbox stays `not_executed`; real AV/YARA/VM deferred per README. |
 | ICES API, post-delivery clawback, RBI, PQC, WORM, global TI, take-down | **No** | Require server/tenant infra out of this repo's boundary. Documented as deferred. |
 
+## 1b. Decisions from design review ("grill me")
+
+- **QR/quishing → real decoder.** Bundle a pure-Go, zero-dependency, offline QR
+  decoder (`internal/qr`) plus stdlib image decoding server-side. Round-trip
+  tested with an in-repo encoder so there are no external fixtures or network.
+- **BEC → deterministic *and* optional LLM.** Ship the offline heuristic as the
+  default; add a pluggable `internal/llm` analyzer with OpenAI / Grok / Mistral
+  request formats, **off unless configured**, so the default remains offline and
+  testable. Networked LLM calls never run in CI.
+- **DLP → full send-blocking.** Implement the DLP engine in Go and wire the
+  Office.js `OnMessageSend` handler to actually block sends on a hit.
+
 ## 2. Design
 
 Add **five new pure-Go detection engines** to `internal/scanner`, all

@@ -14,11 +14,17 @@ if [[ ! -f "$SRC" ]]; then
 fi
 
 mkdir -p "$BRAND"
-for s in 16 32 48 64 128 256 512 1024; do
+for s in 16 32 48 64 80 128 256 512 1024; do
   sips -s format png -z "$s" "$s" "$SRC" --out "$BRAND/logo-$s.png" >/dev/null
 done
 
 cp "$BRAND/logo-512.png" "$ROOT_DIR/assets/logo.png"
+
+# Ribbon command icons required by outlook-addin/manifest.xml (16/32/80),
+# plus the legacy 64px add-in icon referenced by IconUrl.
+cp "$BRAND/logo-16.png" "$ROOT_DIR/outlook-addin/icon-16.png"
+cp "$BRAND/logo-32.png" "$ROOT_DIR/outlook-addin/icon-32.png"
+cp "$BRAND/logo-80.png" "$ROOT_DIR/outlook-addin/icon-80.png"
 cp "$BRAND/logo-64.png" "$ROOT_DIR/outlook-addin/icon-64.png"
 
 ICONSET="$BRAND/SCP2317.iconset"

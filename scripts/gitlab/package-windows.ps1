@@ -1,11 +1,20 @@
 $ErrorActionPreference = 'Stop'
 
+function Assert-LastExitCode {
+  param([string]$Step)
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Step failed with exit code $LASTEXITCODE"
+  }
+}
+
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $OutDir = Join-Path $RootDir 'dist\windows'
 $PayloadDir = Join-Path $OutDir 'payload\SCP-2317'
 $InstallerDir = Join-Path $RootDir 'installer\windows'
 $ApiBinary = Join-Path $PayloadDir 'scp2317-api.exe'
 $MsiOut = Join-Path $OutDir 'SCP-2317.msi'
+$LogoIco = Join-Path $RootDir 'assets\logo.ico'
+$LogoPng = Join-Path $RootDir 'assets\logo.png'
 
 if (Test-Path $OutDir) {
   Remove-Item -Recurse -Force $OutDir
@@ -18,9 +27,16 @@ try {
   $env:GOARCH = 'amd64'
   $env:CGO_ENABLED = '0'
   go build -ldflags='-s -w' -o $ApiBinary ./cmd/api
+  Assert-LastExitCode -Step 'go build'
 
-  if (-not (Test-Path (Join-Path $RootDir 'assets\logo.ico'))) {
+  if (-not (Test-Path $ApiBinary)) {
+    throw "go build reported success but $ApiBinary was not created."
+  }
+  if (-not (Test-Path $LogoIco)) {
     throw 'assets/logo.ico is missing; generate branding assets before packaging.'
+  }
+  if (-not (Test-Path $LogoPng)) {
+    throw 'assets/logo.png is missing; generate branding assets before packaging.'
   }
 
   $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
@@ -33,20 +49,47 @@ try {
     }
   }
   & $iscc.Source (Join-Path $InstallerDir 'mailguard-setup.iss')
+  Assert-LastExitCode -Step 'ISCC.exe (Inno Setup)'
+
+  $ExeOut = Join-Path $OutDir 'SCP-2317-Setup.exe'
+  if (-not (Test-Path $ExeOut)) {
+    throw "ISCC.exe reported success but $ExeOut was not created."
+  }
+
+  # WiX resolves relative Source/SourceFile paths against the process's
+  # current directory, not the .wxs file location (unlike Inno Setup above),
+  # so the payload/logo paths are passed in as absolute preprocessor variables.
+  $wixDefines = @(
+    "-d", "ApiBinaryPath=$ApiBinary",
+    "-d", "LogoIcoPath=$LogoIco",
+    "-d", "LogoPngPath=$LogoPng"
+  )
 
   $wix = Get-Command wix -ErrorAction SilentlyContinue
   if ($wix) {
-    & $wix.Source build (Join-Path $InstallerDir 'mailguard-product.wxs') -o $MsiOut
+    & $wix.Source build (Join-Path $InstallerDir 'mailguard-product.wxs') @wixDefines -o $MsiOut
+    Assert-LastExitCode -Step 'wix build'
   } elseif ((Get-Command candle.exe -ErrorAction SilentlyContinue) -and (Get-Command light.exe -ErrorAction SilentlyContinue)) {
     $objDir = Join-Path $OutDir 'obj'
     New-Item -ItemType Directory -Force -Path $objDir | Out-Null
-    & candle.exe -out (Join-Path $objDir 'mailguard-product.wixobj') (Join-Path $InstallerDir 'mailguard-product.wxs')
+    & candle.exe `
+      "-dApiBinaryPath=$ApiBinary" `
+      "-dLogoIcoPath=$LogoIco" `
+      "-dLogoPngPath=$LogoPng" `
+      -out (Join-Path $objDir 'mailguard-product.wixobj') `
+      (Join-Path $InstallerDir 'mailguard-product.wxs')
+    Assert-LastExitCode -Step 'candle.exe'
     & light.exe -out $MsiOut (Join-Path $objDir 'mailguard-product.wixobj')
+    Assert-LastExitCode -Step 'light.exe'
   } else {
     throw 'WiX toolchain was not found. Install wix.exe or candle/light on the Windows runner.'
   }
 
-  Write-Host "Wrote $(Join-Path $OutDir 'SCP-2317-Setup.exe') and $MsiOut"
+  if (-not (Test-Path $MsiOut)) {
+    throw "wix build reported success but $MsiOut was not created."
+  }
+
+  Write-Host "Wrote $ExeOut and $MsiOut"
 }
 finally {
   Pop-Location

@@ -1,0 +1,8 @@
+[package]
+name = "scp2317-mapi-provider"
+version = "0.1.0"
+edition = "2021"
+
+[target.'cfg(windows)'.dependencies]
+outlook-mapi = "0.15"
+

@@ -257,6 +257,11 @@ artifacts and skips the signature-verify step):
 | `SCP2317_CERT_PFX_BASE64` | Your Authenticode `.pfx`, base64-encoded (`base64 -w0 cert.pfx` / `certutil -encode`). An **EV** cert is recommended for SmartScreen. |
 | `SCP2317_CERT_PASSWORD` | The `.pfx` password. |
 
+Generate a free self-signed cert for testing with
+`scripts/gen-selfsigned-cert.sh` (it prints both secret values and the `gh`
+commands to set them). Full guidance — self-signed vs OV/EV, the EV-on-token
+caveat — is in [`docs/SIGNING.md`](docs/SIGNING.md).
+
 The workflow decodes the cert to `RUNNER_TEMP`, exports `SCP2317_CERT_PFX`,
 locates `signtool.exe` from the Windows SDK, runs `scripts/gitlab/package-windows.ps1`
 (which calls `signtool sign /fd SHA256 /tr <timestamp> /td SHA256`), then

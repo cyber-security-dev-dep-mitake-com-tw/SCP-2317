@@ -49,6 +49,8 @@ pub struct EmailScanRequest {
     pub direction: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub qr_urls: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub received: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -149,6 +151,7 @@ pub fn build_request(
         auth_results: String::new(),
         direction: String::new(),
         qr_urls: Vec::new(),
+        received: Vec::new(),
     }
 }
 
@@ -171,6 +174,37 @@ pub fn build_request_full(
     req.auth_results = auth_results.to_string();
     req.direction = "inbound".to_string();
     req
+}
+
+/// Parses raw RFC 822 transport headers (PR_TRANSPORT_MESSAGE_HEADERS) into the
+/// `Authentication-Results` value and the ordered list of `Received` lines.
+/// Continuation (folded) lines are unfolded first. Portable + unit-tested.
+pub fn parse_transport_headers(raw: &str) -> (String, Vec<String>) {
+    // Unfold: a line beginning with SP/HTAB continues the previous header.
+    let mut unfolded: Vec<String> = Vec::new();
+    for line in raw.split('\n') {
+        let line = line.trim_end_matches('\r');
+        if line.starts_with(' ') || line.starts_with('\t') {
+            if let Some(last) = unfolded.last_mut() {
+                last.push(' ');
+                last.push_str(line.trim());
+                continue;
+            }
+        }
+        unfolded.push(line.to_string());
+    }
+
+    let mut auth_results = String::new();
+    let mut received = Vec::new();
+    for line in &unfolded {
+        let lower = line.to_ascii_lowercase();
+        if auth_results.is_empty() && lower.starts_with("authentication-results:") {
+            auth_results = line["authentication-results:".len()..].trim().to_string();
+        } else if lower.starts_with("received:") {
+            received.push(line["received:".len()..].trim().to_string());
+        }
+    }
+    (auth_results, received)
 }
 
 pub fn verdict_text(v: &Verdict) -> String {
@@ -247,6 +281,22 @@ mod tests {
         );
         assert_eq!(req.urls, vec!["http://evil.test/x"]);
         assert_eq!(req.message_id, "id-1");
+    }
+
+    #[test]
+    fn parse_transport_headers_extracts_auth_and_received() {
+        let raw = "Received: from a.example by b.example\r\n\tid 123; Mon\r\nAuthentication-Results: mx.google.com;\r\n spf=pass; dmarc=fail\r\nReceived: from c.example by d.example\r\nSubject: hi\r\n";
+        let (auth, received) = parse_transport_headers(raw);
+        assert!(auth.contains("dmarc=fail"), "auth={auth}");
+        assert_eq!(received.len(), 2);
+        assert!(received[0].contains("id 123"), "unfold failed: {:?}", received[0]);
+    }
+
+    #[test]
+    fn parse_transport_headers_empty_when_absent() {
+        let (auth, received) = parse_transport_headers("Subject: x\r\nTo: y\r\n");
+        assert!(auth.is_empty());
+        assert!(received.is_empty());
     }
 
     #[test]

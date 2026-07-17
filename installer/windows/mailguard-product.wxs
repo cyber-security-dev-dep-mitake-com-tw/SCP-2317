@@ -2,8 +2,8 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
     Name="SCP-2317"
-    Manufacturer="SCP-2317"
-    Version="0.1.0"
+    Manufacturer="SCP-2317 Email Protection"
+    Version="0.2.0"
     UpgradeCode="{D7E6C3D2-6A6B-42D0-83E3-4B2B5E5FD5B1}">
     <MajorUpgrade DowngradeErrorMessage="A newer version of SCP-2317 is already installed." />
     <MediaTemplate />
@@ -27,8 +27,26 @@
       Execute="deferred"
       Return="ignore"
       Impersonate="yes" />
+    <!-- Start the silent service immediately after install (fire-and-forget). -->
+    <CustomAction
+      Id="StartService"
+      FileRef="SCP2317ApiExe"
+      ExeCommand=""
+      Execute="deferred"
+      Return="asyncNoWait"
+      Impersonate="no" />
+    <!-- Stop the service before its files are removed on uninstall. -->
+    <CustomAction
+      Id="StopService"
+      Directory="INSTALLFOLDER"
+      ExeCommand="[SystemFolder]taskkill.exe /f /im scp2317-api.exe"
+      Execute="deferred"
+      Return="ignore"
+      Impersonate="no" />
     <InstallExecuteSequence>
       <Custom Action="RegisterOutlookComAddin" After="InstallFiles" Condition="NOT Installed" />
+      <Custom Action="StartService" After="RegisterOutlookComAddin" Condition="NOT Installed" />
+      <Custom Action="StopService" Before="UnregisterOutlookComAddin" Condition="REMOVE=&quot;ALL&quot;" />
       <Custom Action="UnregisterOutlookComAddin" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
     </InstallExecuteSequence>
   </Package>
@@ -42,7 +60,13 @@
   <Fragment>
     <ComponentGroup Id="SCP2317Components" Directory="INSTALLFOLDER">
       <Component Id="SCP2317ApiComponent" Guid="{A5C49D62-0D2B-4F3B-9E0F-7D8F3A0D6B6A}">
-        <File Source="$(var.ApiBinaryPath)" KeyPath="yes" />
+        <File Id="SCP2317ApiExe" Source="$(var.ApiBinaryPath)" KeyPath="yes" />
+        <!-- Autostart the silent background service for all users at logon. -->
+        <RegistryValue Root="HKLM"
+                       Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                       Name="SCP-2317"
+                       Type="string"
+                       Value="&quot;[#SCP2317ApiExe]&quot;" />
       </Component>
       <Component Id="SCP2317OutlookAddinComponent" Guid="{E2B0A7F5-735B-4F6F-A03F-50E350C2B47B}">
         <File Id="SCP2317OutlookAddinDll" Source="$(var.AddinDllPath)" KeyPath="yes" />

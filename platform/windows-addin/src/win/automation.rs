@@ -105,6 +105,10 @@ pub fn i32_arg(value: i32) -> VARIANT {
 pub struct CurrentItemFields {
     pub subject: String,
     pub sender_email: String,
+    pub sender_display: String,
+    pub reply_to: String,
+    pub auth_results: String,
+    pub received: Vec<String>,
     pub body_preview: String,
     pub attachments: Vec<Attachment>,
 }
@@ -199,9 +203,57 @@ unsafe fn read_attachments(item: &IDispatch) -> Vec<Attachment> {
     out
 }
 
-/// Reads Subject/Sender/Body/Attachments off the current item using only
-/// the Outlook Object Model (no MAPI). `application` is the `Application`
-/// `IDispatch*` Outlook hands `OnConnection`.
+/// PR_TRANSPORT_MESSAGE_HEADERS (the raw internet headers as a string).
+const PR_TRANSPORT_MESSAGE_HEADERS: &str =
+    "http://schemas.microsoft.com/mapi/proptag/0x007D001E";
+
+/// Reads the raw internet headers via the item's PropertyAccessor. Returns ""
+/// when unavailable (e.g. an item that never traversed SMTP).
+unsafe fn read_transport_headers(item: &IDispatch) -> String {
+    let Ok(pa_v) = get_prop(item, "PropertyAccessor") else {
+        return String::new();
+    };
+    let Some(pa) = variant_as_dispatch(&pa_v) else {
+        return String::new();
+    };
+    call_method(&pa, "GetProperty", &[bstr_arg(PR_TRANSPORT_MESSAGE_HEADERS)])
+        .ok()
+        .and_then(|v| variant_as_string(&v))
+        .unwrap_or_default()
+}
+
+/// Reads the first Reply-To address, if the sender set one.
+unsafe fn read_reply_to(item: &IDispatch) -> String {
+    let Ok(rr_v) = get_prop(item, "ReplyRecipients") else {
+        return String::new();
+    };
+    let Some(rr) = variant_as_dispatch(&rr_v) else {
+        return String::new();
+    };
+    let count = get_prop(&rr, "Count")
+        .ok()
+        .and_then(|v| variant_as_i32(&v))
+        .unwrap_or(0);
+    if count < 1 {
+        return String::new();
+    }
+    let Ok(r1_v) = call_method(&rr, "Item", &[i32_arg(1)]) else {
+        return String::new();
+    };
+    let Some(r1) = variant_as_dispatch(&r1_v) else {
+        return String::new();
+    };
+    get_prop(&r1, "Address")
+        .ok()
+        .and_then(|v| variant_as_string(&v))
+        .unwrap_or_default()
+}
+
+/// Reads Subject/Sender/Body/Attachments plus the identity signals the
+/// defense-in-depth engines need (display name, reply-to, Authentication-Results,
+/// Received chain) off the current item using only the Outlook Object Model
+/// (no MAPI). `application` is the `Application` `IDispatch*` Outlook hands
+/// `OnConnection`.
 pub unsafe fn read_current_item(application: &IDispatch) -> Result<CurrentItemFields> {
     let item = resolve_current_item(application)?;
 
@@ -213,6 +265,13 @@ pub unsafe fn read_current_item(application: &IDispatch) -> Result<CurrentItemFi
         .ok()
         .and_then(|v| variant_as_string(&v))
         .unwrap_or_default();
+    let sender_display = get_prop(&item, "SenderName")
+        .ok()
+        .and_then(|v| variant_as_string(&v))
+        .unwrap_or_default();
+    let reply_to = read_reply_to(&item);
+    let (auth_results, received) =
+        crate::scan_client::parse_transport_headers(&read_transport_headers(&item));
     let mut body_preview = get_prop(&item, "Body")
         .ok()
         .and_then(|v| variant_as_string(&v))
@@ -225,6 +284,10 @@ pub unsafe fn read_current_item(application: &IDispatch) -> Result<CurrentItemFi
     Ok(CurrentItemFields {
         subject,
         sender_email,
+        sender_display,
+        reply_to,
+        auth_results,
+        received,
         body_preview,
         attachments,
     })

@@ -11,7 +11,7 @@
 use crate::ribbon_xml::{self, ribbon_xml};
 use crate::scan_client::{self, Attachment};
 use crate::win::automation::{self, CurrentItemFields};
-use crate::win::ui::{show_message, Severity};
+use crate::win::ui::{open_in_browser, show_message, Severity};
 use std::ffi::c_void;
 use std::sync::Mutex;
 use windows::core::{implement, BSTR, GUID, HRESULT, Interface, OutRef, PCWSTR, Ref, Result};
@@ -27,8 +27,9 @@ const DISPID_ON_LOAD: i32 = 1;
 const DISPID_QUICK_SCAN: i32 = 2;
 const DISPID_REPORT: i32 = 3;
 const DISPID_STATUS: i32 = 4;
-const DISPID_ABOUT: i32 = 5;
-const DISPID_GET_IMAGE: i32 = 6;
+const DISPID_DASHBOARD: i32 = 5;
+const DISPID_ABOUT: i32 = 6;
+const DISPID_GET_IMAGE: i32 = 7;
 
 fn dispid_for_name(name: &str) -> Option<i32> {
     if name.eq_ignore_ascii_case(ribbon_xml::CB_ON_LOAD) {
@@ -39,6 +40,8 @@ fn dispid_for_name(name: &str) -> Option<i32> {
         Some(DISPID_REPORT)
     } else if name.eq_ignore_ascii_case(ribbon_xml::CB_CHECK_STATUS) {
         Some(DISPID_STATUS)
+    } else if name.eq_ignore_ascii_case(ribbon_xml::CB_DASHBOARD) {
+        Some(DISPID_DASHBOARD)
     } else if name.eq_ignore_ascii_case(ribbon_xml::CB_ABOUT) {
         Some(DISPID_ABOUT)
     } else if name.eq_ignore_ascii_case(ribbon_xml::CB_GET_IMAGE) {
@@ -90,13 +93,18 @@ impl Connect {
             );
             return;
         };
-        let req = scan_client::build_request(
+        let mut req = scan_client::build_request_full(
             &fields.sender_email,
             &fields.sender_email,
+            &fields.sender_display,
+            &fields.reply_to,
+            &fields.auth_results,
             &fields.subject,
             &fields.body_preview,
             Self::attachments_for_request(&fields),
         );
+        req.qr_urls = Vec::new();
+        req.received = fields.received.clone();
         match scan_client::call_scan_api(&self.api_base, &req) {
             Ok(verdict) => {
                 let severity = if verdict.status == "malicious" {
@@ -130,13 +138,17 @@ impl Connect {
         } else {
             fields.sender_email.clone()
         };
-        let req = scan_client::build_request(
+        let mut req = scan_client::build_request_full(
             &message_ref,
             &fields.sender_email,
+            &fields.sender_display,
+            &fields.reply_to,
+            &fields.auth_results,
             &fields.subject,
             &fields.body_preview,
             Self::attachments_for_request(&fields),
         );
+        req.received = fields.received.clone();
         let verdict = scan_client::call_scan_api(&self.api_base, &req);
         match scan_client::report_suspicious(&self.api_base, &message_ref) {
             Ok(report) => {
@@ -173,12 +185,22 @@ impl Connect {
         );
     }
 
+    fn run_dashboard(&self) {
+        let url = format!("{}/dashboard", self.api_base.trim_end_matches('/'));
+        open_in_browser(&url);
+    }
+
     fn run_about(&self) {
         show_message(
             "About SCP-2317",
             &format!(
-                "SCP-2317 Email Scanner (native Outlook add-in) {}\nHeuristic MVP. Attachments are never executed.\nAPI: {}",
+                "SCP-2317 Email Scanner (native Outlook add-in) {}\n\
+                 Defense-in-depth heuristics: authentication, spoofing, social-engineering,\n\
+                 quishing (QR decode), threat-intel, route forensics, outbound DLP.\n\
+                 Attachments are never executed.\n\
+                 Dashboard: {}/dashboard\nAPI: {}",
                 env!("CARGO_PKG_VERSION"),
+                self.api_base.trim_end_matches('/'),
                 self.api_base
             ),
             Severity::Info,
@@ -301,6 +323,10 @@ impl windows::Win32::System::Com::IDispatch_Impl for Connect_Impl {
             }
             DISPID_STATUS => {
                 self.run_check_status();
+                Ok(())
+            }
+            DISPID_DASHBOARD => {
+                self.run_dashboard();
                 Ok(())
             }
             DISPID_ABOUT => {

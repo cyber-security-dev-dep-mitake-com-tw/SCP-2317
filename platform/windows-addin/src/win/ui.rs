@@ -8,8 +8,9 @@
 //! documented follow-up in `platform/windows-addin/README.md`.
 
 use windows::core::PCWSTR;
+use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    MessageBoxW, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONWARNING, MB_OK,
+    MessageBoxW, SW_SHOWNORMAL, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONWARNING, MB_OK,
 };
 
 pub enum Severity {
@@ -39,6 +40,23 @@ pub fn show_message(title: &str, body: &str, severity: Severity) {
             PCWSTR(wbody.as_ptr()),
             PCWSTR(wtitle.as_ptr()),
             MB_OK | icon,
+        );
+    }
+}
+
+/// Opens a URL in the user's default browser via the shell. Used to launch the
+/// local diagnostics dashboard served by the Go API.
+pub fn open_in_browser(url: &str) {
+    let wurl = to_wide(url);
+    let wopen = to_wide("open");
+    unsafe {
+        ShellExecuteW(
+            None,
+            PCWSTR(wopen.as_ptr()),
+            PCWSTR(wurl.as_ptr()),
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
         );
     }
 }

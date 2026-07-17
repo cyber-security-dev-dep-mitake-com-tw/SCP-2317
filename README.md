@@ -168,10 +168,21 @@ Outlook add-in  ──HTTP(127.0.0.1)──▶  Go companion service (silent, ba
 
 - **Silent service** — the Go binary is built with `-H=windowsgui` (no console)
   and autostarts in the background, bound to loopback only.
-- **Tray UI** — `platform/tray-julia/` is a Julia app using **QML.jl** (Qt
-  Quick). It shows only a system-tray icon; clicking it pops out a dashboard
-  (service health, verdict counts, recent activity, a URL checker). Closing the
-  window hides it back to the tray.
+- **Built-in dashboard (always available)** — the service serves a
+  self-contained diagnostics page at **`http://127.0.0.1:8080/dashboard`**:
+  service health, verdict counts, the recent event log, a time-of-click URL
+  checker, and the EASM domain check. The native Outlook ribbon has a
+  **Dashboard** button that opens it, and the installer adds a Start-menu
+  shortcut. This is the tray-less fallback and needs no extra toolchain.
+- **Tray UI (optional)** — `platform/tray-julia/` is a Julia app using
+  **QML.jl** (Qt Quick) that surfaces the same data from a system-tray icon
+  (pops out on click, hides to tray on close). It is only built when Julia is
+  present on the packaging runner; otherwise the browser dashboard above is the
+  UI.
+- **Installed behavior (Windows)** — the installer autostarts the silent service
+  for all users at logon (HKLM `Run`), starts it immediately after install, and
+  registers the COM add-in. The event log persists to
+  `%AppData%\SCP-2317\events.jsonl`.
 - **Code signing** — `scripts/gitlab/package-windows.ps1` Authenticode-signs the
   service, the COM add-in, the tray `.exe`, and both installers when
   `SCP2317_CERT_PFX` / `SCP2317_CERT_PASSWORD` are set (EV cert recommended for

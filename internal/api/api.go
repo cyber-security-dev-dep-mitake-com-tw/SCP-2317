@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/example/scp2317-agent/internal/easm"
@@ -22,11 +23,30 @@ type Handler struct {
 	sink     *events.Sink
 }
 
+// dataPath resolves the event-store location: SCP2317_DATA when set, else a
+// per-user config dir (e.g. %AppData%\SCP-2317 on Windows) so the event log
+// persists on installed machines without any configuration. Empty (in-memory
+// store) only if no user dir is resolvable.
+func dataPath() string {
+	if p := os.Getenv("SCP2317_DATA"); p != "" {
+		return p
+	}
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	dir := filepath.Join(base, "SCP-2317")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "events.jsonl")
+}
+
 func New(p *scanner.Pipeline) *Handler {
 	if p == nil {
 		p = scanner.NewPipeline()
 	}
-	st, _ := store.Open(os.Getenv("SCP2317_DATA"))
+	st, _ := store.Open(dataPath())
 	return &Handler{
 		pipeline: p,
 		sandbox:  sandbox.NewMemoryWorker(),
@@ -42,7 +62,9 @@ func (h *Handler) Routes() http.Handler {
 	m.HandleFunc("POST /v1/sandbox/submit", h.sandboxSubmit)
 	m.HandleFunc("GET /v1/sandbox/status/{jobID}", h.sandboxStatus)
 	m.HandleFunc("GET /v1/sandbox/report/{jobID}", h.sandboxReport)
-	// Companion-app endpoints consumed by the tray UI.
+	// Companion-app endpoints consumed by the tray UI and the built-in
+	// diagnostics dashboard (the tray-less fallback surface).
+	m.HandleFunc("GET /dashboard", h.dashboard)
 	m.HandleFunc("GET /v1/events", h.events)
 	m.HandleFunc("GET /v1/stats", h.stats)
 	m.HandleFunc("POST /v1/urlcheck", h.urlCheck)

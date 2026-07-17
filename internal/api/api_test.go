@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/example/scp2317-agent/internal/model"
@@ -165,4 +167,18 @@ func TestURLCheckRequiresURL(t *testing.T) {
 	if rr.Code != 400 {
 		t.Fatalf("code=%d", rr.Code)
 	}
+}
+
+// TestMain routes the default event store to a temp file so tests never write
+// into the real per-user config directory (see dataPath).
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "scp2317-test")
+	if err == nil {
+		os.Setenv("SCP2317_DATA", filepath.Join(dir, "events.jsonl"))
+	}
+	code := m.Run()
+	if dir != "" {
+		os.RemoveAll(dir)
+	}
+	os.Exit(code)
 }

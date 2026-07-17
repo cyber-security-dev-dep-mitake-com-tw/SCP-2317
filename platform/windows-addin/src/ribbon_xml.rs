@@ -17,6 +17,7 @@ pub const CB_ON_LOAD: &str = "OnRibbonLoad";
 pub const CB_QUICK_SCAN: &str = "OnQuickScanClick";
 pub const CB_REPORT_SUSPICIOUS: &str = "OnReportSuspiciousClick";
 pub const CB_CHECK_STATUS: &str = "OnCheckStatusClick";
+pub const CB_DASHBOARD: &str = "OnDashboardClick";
 pub const CB_ABOUT: &str = "OnAboutClick";
 pub const CB_GET_IMAGE: &str = "OnGetButtonImage";
 
@@ -28,6 +29,7 @@ pub const CALLBACK_NAMES: &[&str] = &[
     CB_QUICK_SCAN,
     CB_REPORT_SUSPICIOUS,
     CB_CHECK_STATUS,
+    CB_DASHBOARD,
     CB_ABOUT,
     CB_GET_IMAGE,
 ];
@@ -49,6 +51,11 @@ pub fn ribbon_xml() -> String {
                   supertip="Scan the message and record a sandbox job (status stays not_executed) for follow-up."
                   getImage="{get_image}"
                   onAction="{report}" />
+          <button id="SCP2317.Dashboard" label="Dashboard" size="large"
+                  screentip="Open Dashboard"
+                  supertip="Open the local SCP-2317 diagnostics dashboard in your browser: event log, verdict stats, time-of-click URL check and EASM domain check."
+                  getImage="{get_image}"
+                  onAction="{dashboard}" />
           <button id="SCP2317.CheckStatus" label="Check API Status" size="normal"
                   screentip="Check API Status"
                   supertip="Ping the SCP-2317 scan API and show whether it is reachable."
@@ -70,6 +77,7 @@ pub fn ribbon_xml() -> String {
         get_image = CB_GET_IMAGE,
         quick_scan = CB_QUICK_SCAN,
         report = CB_REPORT_SUSPICIOUS,
+        dashboard = CB_DASHBOARD,
         status = CB_CHECK_STATUS,
         about = CB_ABOUT,
     )
